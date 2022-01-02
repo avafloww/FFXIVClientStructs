@@ -20,6 +20,9 @@ namespace FFXIVClientStructs.FFXIV.Client.System.Framework
         [FieldOffset(0x1680)] public long ServerTime;
         [FieldOffset(0x1770)] public long EorzeaTime;
 
+        // offset in wchar_t* assignment of func: E8 ? ? ? ? EB 21 0F B6 54 24 ?
+        [FieldOffset(0x220C)] public fixed char GameConfigDataPath[260];
+
         [FieldOffset(0x2B30)] public ExcelModuleInterface* ExcelModuleInterface;
         [FieldOffset(0x2B38)] public ExdModule* ExdModule;
 
