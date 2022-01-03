@@ -12,7 +12,7 @@ namespace FFXIVClientStructs.FFXIV.Client.System.Framework
 
     // size=0x35B8
     // ctor E8 ? ? ? ? 48 8B C8 48 89 05 ? ? ? ? EB 0A 48 8B CE 
-    [StructLayout(LayoutKind.Explicit, Size = 0x35B8)]
+    [StructLayout(LayoutKind.Explicit, Size = 0x35B8, CharSet = CharSet.Unicode)]
     public unsafe partial struct Framework
     {
         [FieldOffset(0x10)] public SystemConfig SystemConfig;
@@ -21,7 +21,9 @@ namespace FFXIVClientStructs.FFXIV.Client.System.Framework
         [FieldOffset(0x1770)] public long EorzeaTime;
 
         // offset in wchar_t* assignment of func: E8 ? ? ? ? EB 21 0F B6 54 24 ?
-        [FieldOffset(0x220C)] public fixed char GameConfigDataPath[260];
+        [FieldOffset(0x220C)]
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public fixed char GameConfigDataPath[260];
 
         [FieldOffset(0x2B30)] public ExcelModuleInterface* ExcelModuleInterface;
         [FieldOffset(0x2B38)] public ExdModule* ExdModule;
