@@ -3,6 +3,7 @@ use std::ptr;
 use crate::cpp_std::Pair;
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct Node<K> where K: Copy {
     left: *mut Node<K>,
     parent: *mut Node<K>,
@@ -67,6 +68,7 @@ impl<K> Node<K> where K: Copy {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct Set<K> where K: Copy {
     head: *mut Node<K>,
     count: u64,
@@ -90,6 +92,7 @@ impl<K> Set<K> where K: Copy {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct Enumerator<K> where K: Copy {
     head: *mut Node<K>,
     current: *mut Node<K>,

@@ -194,6 +194,22 @@ public class Exporter
         }
     }
 
+    private static int GetEffectiveFieldSize(FieldInfo finfo)
+    {
+        if (finfo.IsFixed())
+        {
+            var fixedType = finfo.GetFixedType();
+            var fixedSize = finfo.GetFixedSize();
+            return SizeOf(fixedType) * fixedSize;
+        }
+        
+        if (finfo.FieldType.IsPointer) return 8;
+        if (finfo.FieldType.IsEnum) return SizeOf(Enum.GetUnderlyingType(finfo.FieldType));
+        if (finfo.FieldType.IsGenericType) return Marshal.SizeOf(Activator.CreateInstance(finfo.FieldType));
+        
+        return SizeOf(finfo.FieldType);
+    }
+
     private void ProcessStruct(Type type, RustModule module)
     {
         if (KnownTypes.Contains(type))
@@ -209,6 +225,10 @@ public class Exporter
         var fullTypeName = FixFullName(type);
         var baseTypeName = GetBaseName(fullTypeName);
 
+        if (baseTypeName.Contains("hkMatrix4f"))
+        {
+            Console.WriteLine("FOUND IT: " + fullTypeName);
+        }
         int structSize;
         if (type.IsGenericType)
         {
@@ -235,9 +255,9 @@ public class Exporter
             else
             {
                 // don't add generic type usages
-                return;
                 // structSize = Marshal.SizeOf(Activator.CreateInstance(type));
-                // Console.WriteLine("Has no generic params: " + type.FullName);
+                // Console.WriteLine("SKIP - Has no generic params: " + type.FullName);
+                return;
             }
         }
         else
@@ -261,9 +281,19 @@ public class Exporter
         foreach (var grouping in fieldGroupings)
         {
             var fieldOffset = grouping.Key;
-            var finfos = grouping.ToList();
+            if (offset < fieldOffset)
+            {
+                // skip these fields since they probably overlap with the previous field
+                continue;
+            }
+            
+            // todo: fix vtables, we ignore them for now
+            var finfos = grouping
+                .Where((finfo) => finfo.Name.ToLower() != "vtbl" && finfo.Name.ToLower() != "vtable")
+                .OrderByDescending(GetEffectiveFieldSize)
+                .ToList();
 
-            int unionMaxSize = 0;
+            var unionMaxSize = 0;
             var isUnion = finfos.Count > 1;
             RustStruct rsTarget = rs;
 
@@ -286,7 +316,7 @@ public class Exporter
             {
                 var finfo = finfos[i];
                 var fieldType = finfo.FieldType;
-                int fieldSize = 0;
+                var fieldSize = GetEffectiveFieldSize(finfo);
 
                 if (!isUnion)
                     offset = FillGaps(offset, fieldOffset, padFill, rs);
@@ -295,7 +325,7 @@ public class Exporter
                 {
                     Debug.WriteLine(
                         $"Current offset exceeded the next field's offset (0x{offset:X} > 0x{fieldOffset:X}): {FixFullName(type)}.{finfo.Name}");
-                    return;
+                    break;
                 }
 
                 if (finfo.IsFixed())
@@ -307,8 +337,6 @@ public class Exporter
                     rsTarget.Add(string.Format(
                         $"/* 0x{{0:X{pad}}} */ {ToRustName(finfo.Name)}: [{FixTypeName(fixedType)}; 0x{fixedSize:X}]",
                         offset));
-
-                    fieldSize = SizeOf(fixedType) * fixedSize;
                 }
                 else if (fieldType.IsPointer)
                 {
@@ -319,8 +347,6 @@ public class Exporter
 
                     rsTarget.Add(string.Format(
                         $"/* 0x{{0:X{pad}}} */ {ToRustName(finfo.Name)}: {FixTypeName(fieldType)}", offset));
-
-                    fieldSize = 8;
                 }
                 else
                 {
@@ -328,20 +354,12 @@ public class Exporter
 
                     rsTarget.Add(string.Format(
                         $"/* 0x{{0:X{pad}}} */ {ToRustName(finfo.Name)}: {FixTypeName(fieldType)}", offset));
-
-                    if (fieldType == typeof(bool))
-                        fieldSize = 1;
-                    else if (fieldType.IsGenericType)
-                        fieldSize = Marshal.SizeOf(Activator.CreateInstance(fieldType));
-                    else if (fieldType.IsEnum)
-                        fieldSize = SizeOf(Enum.GetUnderlyingType(fieldType));
-                    else
-                        fieldSize = SizeOf(fieldType);
                 }
 
                 if (isUnion)
                 {
                     unionMaxSize = Math.Max(unionMaxSize, 8);
+                    unionMaxSize = Math.Max(unionMaxSize, fieldSize);
                 }
                 else
                 {
@@ -361,7 +379,7 @@ public class Exporter
         module.Add(baseTypeName, rs);
     }
 
-    private int SizeOf(Type type)
+    private static int SizeOf(Type type)
     {
         // Marshal.SizeOf doesn't work correctly because the assembly is unmarshaled, and more specifically, it sets bools as 4 bytes long...
         return (int?)typeof(Unsafe).GetMethod("SizeOf")?.MakeGenericMethod(type).Invoke(null, null) ?? 0;

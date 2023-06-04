@@ -1,4 +1,5 @@
 ﻿#[repr(C)]
+#[derive(Clone)]
 pub struct Deque {
     pub container_base: *mut (), // iterator base nonsense
     pub map: *mut *mut u8, // pointer to array of pointers (size MapSize) to arrays of u8 (size BlockSize)

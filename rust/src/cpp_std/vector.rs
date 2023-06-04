@@ -3,7 +3,7 @@ use std::ops::Index;
 use std::slice;
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Vector<T> {
     first: *mut T,
     last: *mut T,
