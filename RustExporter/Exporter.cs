@@ -10,56 +10,9 @@ namespace RustExporter;
 
 public class Exporter
 {
-    // immutable set of all rust keywords
-    public static readonly ImmutableHashSet<string> RustKeywords = ImmutableHashSet.Create(new[]
-    {
-        "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for", "if", "impl",
-        "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static",
-        "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while", "async", "await", "dyn",
-        "abstract", "become", "box", "do", "final", "macro", "override", "priv", "typeof", "unsized", "virtual",
-        "yield", "try"
-    });
-
     public static string Indent(int level)
     {
         return new string(' ', level * 4);
-    }
-
-    public static string ToRustName(string input)
-    {
-        // generally converts UpperCamelCase to snake_case, except for subsequent uppercase letters
-
-        var sb = new StringBuilder();
-        for (var i = 0; i < input.Length; i++)
-        {
-            char c = input[i];
-            if (char.IsUpper(c))
-            {
-                if (i > 0 && char.IsUpper(input[i - 1]))
-                {
-                    sb.Append(char.ToLower(c));
-                }
-                else
-                {
-                    if (i > 0) sb.Append('_');
-                    sb.Append(char.ToLower(c));
-                }
-            }
-            else
-            {
-                sb.Append(c);
-            }
-        }
-
-        var built = sb.ToString();
-
-        // if the name matches any Rust keywords, suffix it with an underscore
-        if (RustKeywords.Contains(built))
-        {
-            built += "_";
-        }
-
-        return built;
     }
 
     #region singleton
@@ -130,7 +83,7 @@ public class Exporter
         }
         else
         {
-            Console.WriteLine(FixTypeName(typeof(AtkValue).GetField("Vector").FieldType));
+            Console.WriteLine(RustTypeRef.ClrToRustName(typeof(AtkValue).GetField("Vector").FieldType));
         }
 
         return header.ToString();
@@ -222,19 +175,19 @@ public class Exporter
 
         KnownTypes.Add(type);
 
-        var fullTypeName = FixFullName(type);
-        var baseTypeName = GetBaseName(fullTypeName);
+        var rustType = (RustTypeRef)type;
+        var baseTypeName = rustType.BaseName;
 
         if (baseTypeName.Contains("hkMatrix4f"))
         {
-            Console.WriteLine("FOUND IT: " + fullTypeName);
+            Console.WriteLine("FOUND IT: " + rustType);
         }
         int structSize;
         if (type.IsGenericType)
         {
             if (type.ContainsGenericParameters)
             {
-                Console.WriteLine("Has " + type.GetGenericArguments().Length + " generic params: " + fullTypeName);
+                Console.WriteLine("Has " + type.GetGenericArguments().Length + " generic params: " + rustType);
                 // Generic types are ignored if they cannot be instantiated.
                 var gls = new List<string>();
                 for (int i = 1; i <= type.GetGenericArguments().Length; i++)
@@ -246,7 +199,7 @@ public class Exporter
                 var grs = new RustStruct(baseTypeName, 0);
                 foreach (var s in gls)
                 {
-                    grs.Add($"__phantom_{s.ToLower()}: std::marker::PhantomData<{s}>");
+                    grs.Add($"__phantom_{s.ToLower()}", new RustTypeRef($"std::marker::PhantomData<{s}>"));
                 }
                 
                 module.Add(baseTypeName, grs);
@@ -324,37 +277,34 @@ public class Exporter
                 if (offset > fieldOffset)
                 {
                     Debug.WriteLine(
-                        $"Current offset exceeded the next field's offset (0x{offset:X} > 0x{fieldOffset:X}): {FixFullName(type)}.{finfo.Name}");
+                        $"Current offset exceeded the next field's offset (0x{offset:X} > 0x{fieldOffset:X}): {RustTypeRef.ClrToRustName(type)}.{finfo.Name}");
                     break;
                 }
 
+                RustTypeRef rustTypeRef;
                 if (finfo.IsFixed())
                 {
                     var fixedType = finfo.GetFixedType();
                     var fixedSize = finfo.GetFixedSize();
                     ProcessType(fixedType);
 
-                    rsTarget.Add(string.Format(
-                        $"/* 0x{{0:X{pad}}} */ {ToRustName(finfo.Name)}: [{FixTypeName(fixedType)}; 0x{fixedSize:X}]",
-                        offset));
+                    rustTypeRef = new RustTypeRef(RustTypeRef.ClrToRustName(fixedType), fixedSize);
                 }
-                else if (fieldType.IsPointer)
+                else
+                {
+                    rustTypeRef = new RustTypeRef(RustTypeRef.ClrToRustName(fieldType));
+                }
+                
+                if (fieldType.IsPointer)
                 {
                     var elemType = fieldType.GetElementType();
                     while (elemType.IsPointer)
                         elemType = elemType.GetElementType();
                     ProcessType(elemType);
-
-                    rsTarget.Add(string.Format(
-                        $"/* 0x{{0:X{pad}}} */ {ToRustName(finfo.Name)}: {FixTypeName(fieldType)}", offset));
                 }
-                else
-                {
-                    ProcessType(fieldType);
-
-                    rsTarget.Add(string.Format(
-                        $"/* 0x{{0:X{pad}}} */ {ToRustName(finfo.Name)}: {FixTypeName(fieldType)}", offset));
-                }
+                
+                ProcessType(fieldType);
+                rsTarget.Add(RustTypeRef.SafeSnakeCase(finfo.Name), rustTypeRef, string.Format($"0x{{0:X{pad}}}", offset));
 
                 if (isUnion)
                 {
@@ -369,8 +319,7 @@ public class Exporter
 
             if (isUnion)
             {
-                rs.Add(string.Format($"/* 0x{{0:X{pad}}} */ _union_0x{offset:x}: {fullTypeName}{unionSuffix}",
-                    offset));
+                rs.Add($"_union_0x{offset:x}", new RustTypeRef(rustType + unionSuffix), string.Format($"0x{{0:X{pad}}}", offset));
                 offset += unionMaxSize;
             }
         }
@@ -394,20 +343,8 @@ public class Exporter
 
         Debug.WriteLine($"Processing Enum:  {type.FullName}");
 
-        var baseTypeName = GetBaseName(FixFullName(type));
-        var rs = new RustEnum(baseTypeName, FixTypeName(type.GetEnumUnderlyingType()));
-
-        // if (EnvFormat == EnvFormat.IDA)
-        // {
-        //     var underlyingTypeName = FixTypeName(type.GetEnumUnderlyingType());
-        //     sb.AppendLine($"enum {type.Name}: {underlyingTypeName}");
-        // }
-        // else
-        // {
-        //     var underlyingType = type.GetEnumUnderlyingType();
-        //     var fixedTypeName = FixTypeName(type);
-        //     sb.AppendLine($"enum {fixedTypeName} /* Size=0x{SizeOf(underlyingType):X} */");
-        // }
+        var baseTypeName = GetBaseName(RustTypeRef.ClrToRustName(type));
+        var rs = new RustEnum(baseTypeName, RustTypeRef.ClrToRustName(type.GetEnumUnderlyingType()));
 
         try
         {
@@ -443,218 +380,32 @@ public class Exporter
         return parts[^1];
     }
 
-    public static string FixFullName(Type type)
-    {
-        string fullName;
-        var isPrimitive = false;
-        if (type.IsGenericType || (type.IsPointer && type.GetElementType().IsGenericType))
-        {
-            
-            // todo: fix generics
-            bool isPointer = type.IsPointer;
-            var dereferenced = isPointer ? type.GetElementType() : type;
-            var generic = dereferenced.GetGenericTypeDefinition();
-            
-            if (type.FullName.StartsWith(typeof(FFXIVClientStructs.Interop.Pointer<>).FullName))
-            {
-                fullName = FixTypeName(dereferenced.GenericTypeArguments[0]) + '*';
-                isPrimitive = true; // todo this won't always be correct, probably need to refactor
-            }
-            else
-            {
-                fullName = generic.FullName.Split('`')[0];
-                // if (isPointer) fullName = "*mut " + fullName;
-                if (dereferenced.IsNested)
-                {
-                    fullName += '+' + generic.FullName.Split('+')[1].Split('[')[0];
-                }
-
-                fullName += '<';
-
-                if (dereferenced.GenericTypeArguments.Length > 0)
-                {
-                    var fixedNames = new List<string>();
-                    foreach (var argType in dereferenced.GenericTypeArguments)
-                    {
-                        fixedNames.Add(FixTypeName(argType));
-                    }
-
-                    fullName += string.Join(", ", fixedNames);
-                }
-
-                fullName += '>';
-            }
-        }
-        else
-        {
-            fullName = type.FullName;
-        }
-
-        // Console.WriteLine("FULL: " + fullName);
-        if (fullName.StartsWith(FFXIVNamespacePrefix))
-        {
-            fullName = fullName.Remove(0, FFXIVNamespacePrefix.Length);
-            fullName = "ffxiv." + fullName;
-        }
-
-        if (fullName.StartsWith(HavokNamespacePrefix))
-        {
-            fullName = fullName.Remove(0, HavokNamespacePrefix.Length);
-            fullName = "havok." + fullName;
-        }
-        
-        if (fullName.StartsWith(STDNamespacePrefix))
-        {
-            // Console.WriteLine("STD:  " + fullName);
-            fullName = fullName.Remove(0, STDNamespacePrefix.Length);
-            if (fullName.StartsWith("Std"))
-            {
-                fullName = fullName.Remove(0, 3);
-            }
-
-            fullName = "cpp_std." + fullName;
-        }
-
-        if (fullName.StartsWith(InteropNamespacePrefix))
-            fullName = fullName.Remove(0, InteropNamespacePrefix.Length);
-
-        if (fullName.Contains("FFXIVClientStructs, Version"))
-        {
-            if (fullName.EndsWith("*"))
-            {
-                fullName = "*mut std::ffi::c_void";
-            }
-            else
-            {
-                throw new Exception($"Failed to fix name: {fullName}");
-            }
-        }
-
-        // This is a hack because Ghidra doesn't support specifying the enum size
-        // By appending 0x<size> on the enum name, it makes it easier to manually go
-        // in and fix the sizes up after the fact.
-        // if (EnvFormat == EnvFormat.Ghidra && type.IsEnum)
-        // {
-        //     var underlyingType = type.GetEnumUnderlyingType();
-        //     fullName += $"0x{SizeOf(underlyingType):X}";
-        // }
-
-        // snake-case all components except for the last one
-        var parts = fullName.Split('.');
-        for (int i = 0; i < parts.Length - 1; i++)
-        {
-            parts[i] = ToRustName(parts[i]);
-        }
-
-        fullName = string.Join(".", parts);
-        fullName = fullName.Replace(".", "::").Replace("+", "_");
-        if (!isPrimitive) fullName = "crate::" + fullName;
-
-        // execute twice to account for double-pointers
-        for (var i = 0; i < 2; i++)
-        {
-            if (fullName.EndsWith('*'))
-            {
-                fullName = string.Concat("*mut ", fullName.AsSpan(0, fullName.Length - 1));
-            }
-        }
-        
-        if (type.IsPointer)
-        {
-            fullName = "*mut " + fullName;
-        }
-
-        return fullName;
-    }
-
-    private static string FixTypeName(Type type)
-    {
-        if (type == typeof(void))
-        {
-            // probably a return value
-            return "()";
-        }
-
-        if (type == typeof(void*)) return "*mut std::ffi::c_void";
-        if (type == typeof(void**)) return "*mut *mut std::ffi::c_void";
-        if (type == typeof(char) || type == typeof(byte) || type == typeof(sbyte)) return "i8";
-        if (type == typeof(char*) || type == typeof(byte*)) return "*mut i8";
-        if (type == typeof(char**) || type == typeof(byte**)) return "*mut *mut i8";
-        if (type == typeof(bool)) return "bool";
-        if (type == typeof(float)) return "f32";
-        if (type == typeof(double)) return "f64";
-        if (type == typeof(short)) return "i16";
-        if (type == typeof(int)) return "i32";
-        if (type == typeof(long)) return "i64";
-        if (type == typeof(ushort)) return "u16";
-        if (type == typeof(uint)) return "u32";
-        if (type == typeof(ulong)) return "u64";
-        if (type == typeof(IntPtr)) return "*mut usize"; // todo?
-        if (type == typeof(short*)) return "*mut i16";
-        if (type == typeof(ushort*)) return "*mut u16";
-        if (type == typeof(int*)) return "*mut i32";
-        if (type == typeof(uint*)) return "*mut u32";
-        if (type == typeof(Single*)) return "*mut f32";
-
-        return FixFullName(type);
-    }
-
     private int FillGaps(int offset, int maxOffset, string padFill, RustStruct rs)
     {
         int gap;
         while ((gap = maxOffset - offset) > 0)
         {
-            // if (GapStrategy == GapStrategy.FullSize)
-            // {
-            //     if (offset % 8 == 0 && gap >= 8)
-            //     {
-            //         sb.AppendLine($"    /* {padFill} */ __int64 _gap_0x{offset:X};");
-            //         offset += 8;
-            //     }
-            //     else if (offset % 4 == 0 && gap >= 4)
-            //     {
-            //         sb.AppendLine($"    /* {padFill} */ __int32 _gap_0x{offset:X};");
-            //         offset += 4;
-            //     }
-            //     else if (offset % 2 == 0 && gap >= 2)
-            //     {
-            //         sb.AppendLine($"    /* {padFill} */ __int16 _gap_0x{offset:X};");
-            //         offset += 2;
-            //     }
-            //     else
-            //     {
-            //         sb.AppendLine($"    /* {padFill} */ byte _gap_0x{offset:X};");
-            //         offset += 1;
-            //     }
-            // }
-            // else if (GapStrategy == GapStrategy.ByteArray)
-            // {
             if (offset % 8 == 0 && gap >= 8)
             {
                 var gapDiv = gap - (gap % 8);
-                rs.Add($"/* {padFill} */ _gap_0x{offset:x}: [u8; 0x{gapDiv:X}]");
+                rs.Add($"_gap_0x{offset:x}", new RustTypeRef("u8", gapDiv), padFill);
                 offset += gapDiv;
             }
             else if (offset % 4 == 0 && gap >= 4)
             {
-                rs.Add($"/* {padFill} */ _gap_0x{offset:x}: [u8; 0x4]");
+                rs.Add($"_gap_0x{offset:x}", new RustTypeRef("u8", 4), padFill);
                 offset += 4;
             }
             else if (offset % 2 == 0 && gap >= 2)
             {
-                rs.Add($"/* {padFill} */ _gap_0x{offset:x}: [u8; 0x2]");
+                rs.Add($"_gap_0x{offset:x}", new RustTypeRef("u8", 2), padFill);
                 offset += 2;
             }
             else
             {
-                rs.Add($"/* {padFill} */ _gap_0x{offset:x}: u8");
+                rs.Add($"_gap_0x{offset:x}", new RustTypeRef("u8"), padFill);
                 offset += 1;
             }
-            // }
-            // else
-            // {
-            //     throw new Exception($"Unknown GapStrategy {GapStrategy}");
-            // }
         }
 
         return offset;

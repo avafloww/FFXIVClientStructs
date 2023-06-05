@@ -2,7 +2,7 @@
 
 namespace RustExporter;
 
-public class RustStruct : IRustExportable
+public class RustStruct : RustTypeDecl
 {
     private const string DERIVE_CLONE = "#[derive(Clone)]";
     private const string DERIVE_COPY_CLONE = "#[derive(Copy, Clone)]";
@@ -24,8 +24,38 @@ public class RustStruct : IRustExportable
         Size = size;
         IsUnion = isUnion;
     }
+
+    public RustStruct(Type clrType)
+    {
+        
+    }
     
-    public void Add(string member)
+    public void Add(string name, RustTypeRef rustTypeRef, string? prefixComment = null, string? suffixComment = null)
+    {
+        var sb = new StringBuilder();
+
+        if (prefixComment != null)
+        {
+            sb.Append("/* ");
+            sb.Append(prefixComment);
+            sb.Append("*/ ");
+        }
+
+        sb.Append(name);
+        sb.Append(": ");
+        sb.Append(rustTypeRef);
+        
+        if (suffixComment != null)
+        {
+            sb.Append(" /* ");
+            sb.Append(suffixComment);
+            sb.Append("*/");
+        }
+        
+        Add(sb.ToString());
+    }
+    
+    private void Add(string member)
     {
         _members.Add(member);
 
@@ -47,7 +77,7 @@ public class RustStruct : IRustExportable
         }
     }
     
-    public void Export(StringBuilder builder, int indentLevel)
+    public override void Export(StringBuilder builder, int indentLevel)
     {
         var type = IsUnion ? "union" : "struct";
         var sizeComment = IsUnion ? "" : $" /* Size=0x{Size:X} */";

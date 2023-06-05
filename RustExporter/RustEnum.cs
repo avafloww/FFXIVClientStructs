@@ -2,7 +2,7 @@
 
 namespace RustExporter;
 
-public class RustEnum : IRustExportable
+public class RustEnum : RustTypeDecl
 {
     public string Name { get; }
     public string UnderlyingType { get; }
@@ -19,9 +19,13 @@ public class RustEnum : IRustExportable
         _members.Add(name, value);
     }
     
-    public void Export(StringBuilder builder, int indentLevel)
+    public override void Export(StringBuilder builder, int indentLevel)
     {
-        builder.AppendLine($"{Exporter.Indent(indentLevel)}#[repr({UnderlyingType})]");
+        if (_members.Count > 0)
+        {
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}#[repr({UnderlyingType})]");
+        }
+
         builder.AppendLine($"{Exporter.Indent(indentLevel)}#[derive(Copy, Clone, Debug)]");
         builder.AppendLine($"{Exporter.Indent(indentLevel)}pub enum {Name} {{");
         foreach (var member in _members)

@@ -36,7 +36,7 @@ public class RustModule : IRustExportable
     
     public virtual void Export(StringBuilder builder, int indentLevel)
     {
-        var name = Exporter.ToRustName(Name);
+        var name = RustTypeRef.SafeSnakeCase(Name);
         
         builder.AppendLine($"{Exporter.Indent(indentLevel)}pub mod {name} {{");
         foreach (var member in _members)
