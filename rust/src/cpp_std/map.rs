@@ -1,5 +1,5 @@
-﻿use std::mem;
-use std::ptr;
+﻿
+
 use crate::cpp_std::Pair;
 
 #[repr(C)]
@@ -43,7 +43,7 @@ impl<K, V> Node<K, V> where K: Copy, V: Copy {
         }
 
         if (*self.left).is_nil {
-            let mut ptr: *mut Node<K, V> = self;
+            let ptr: *mut Node<K, V> = self;
             let mut node: *mut Node<K, V>;
             while {
                 node = (*ptr).parent;

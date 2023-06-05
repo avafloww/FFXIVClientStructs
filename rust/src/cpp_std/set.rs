@@ -1,6 +1,6 @@
-﻿use std::mem;
-use std::ptr;
-use crate::cpp_std::Pair;
+﻿
+
+
 
 #[repr(C)]
 #[derive(Clone)]
@@ -43,7 +43,7 @@ impl<K> Node<K> where K: Copy {
         }
 
         if (*self.left).is_nil {
-            let mut ptr: *mut Node<K> = self;
+            let ptr: *mut Node<K> = self;
             let mut node: *mut Node<K>;
             while {
                 node = (*ptr).parent;

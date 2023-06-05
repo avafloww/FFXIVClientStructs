@@ -1,4 +1,7 @@
-﻿using System.Text;
+﻿using System.Collections.Immutable;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace RustExporter;
 
@@ -7,104 +10,335 @@ public class RustStruct : RustTypeDecl
     private const string DERIVE_CLONE = "#[derive(Clone)]";
     private const string DERIVE_COPY_CLONE = "#[derive(Copy, Clone)]";
 
-    // keep track of types that are Copy-tainted (aka, do not derive Copy, or touch something that doesn't derive Copy)
-    // this is a little silly because it doesn't account for fullName, but it's probably good enough for now
-    private static readonly HashSet<string> CopyTaintedTypes = new();
-    
-    public string Name { get; }
-    public int Size { get; }
-    public bool IsUnion { get; set; }
-    private readonly List<string> _members = new();
-    // todo: fix this, temp hack just while we fix all the other shit
-    private string _derive = DERIVE_CLONE; // DERIVE_COPY_CLONE;
+    // a hack to work around a #[derive(Clone)] issue for some structs
+    // could probably fix this properly but I'm convinced it's much more work than it's worth
+    private static readonly string[] SpecialCaseNoDerive = {
+        "crate::ffxiv::client::ui::misc::ItemOrderModule_Union",
+        "crate::ffxiv::client::ui::misc::ItemOrderModule",
+        "crate::ffxiv::client::system::resource::ResourceGraph_CategoryContainer",
+        "crate::ffxiv::client::system::resource::ResourceGraph",
+    };
 
-    public RustStruct(string name, int size, bool isUnion = false)
+    public int Size { get; }
+    public bool IsUnion { get; }
+    public int UnionCount { get; private set; }
+    public IEnumerable<RustTypeRef> TypeRefs => _members.Select(m => m.TypeRef);
+
+    private readonly List<Member> _members = new();
+    private string _derive = DERIVE_COPY_CLONE;
+
+    private RustStruct(string name, int size, bool isUnion = false) : base(name, new RustTypeRef(name).Module)
     {
-        Name = name;
         Size = size;
         IsUnion = isUnion;
     }
 
-    public RustStruct(Type clrType)
+    internal RustStruct(Type clrType) : this(clrType, clrType)
     {
-        
     }
-    
+
+    internal RustStruct(RustTypeRef rustType, Type clrType) : base(rustType.Name, rustType.Module)
+    {
+        if (clrType.IsGenericType)
+        {
+            if (clrType.ContainsGenericParameters)
+            {
+                Console.WriteLine("Has " + clrType.GetGenericArguments().Length + " generic params: " + rustType);
+                // Generic types are ignored if they cannot be instantiated.
+                var gls = new List<string>();
+                for (int i = 1; i <= clrType.GetGenericArguments().Length; i++)
+                {
+                    gls.Add($"T{i}");
+                }
+
+                Name = Name.Replace("<>", $"<{string.Join(", ", gls)}>");
+
+                // set up this type and bail early
+                Size = 0;
+                IsUnion = false;
+
+                foreach (var s in gls)
+                {
+                    Add($"__phantom_{s.ToLower()}", new RustTypeRef($"std::marker::PhantomData<{s}>"));
+                }
+
+                rustType.Module.Add(Name, this);
+            }
+
+            return;
+        }
+        else
+        {
+            Size = SizeOf(clrType);
+        }
+
+        // var rs = new RustStruct(typeName, structSize);
+
+        var pad = Size.ToString("X").Length;
+        var padFill = new string(' ', pad + 2);
+
+        var offset = 0;
+        var fieldGroupings = clrType.GetFields()
+            .Where(finfo => !Attribute.IsDefined(finfo, typeof(ObsoleteAttribute)))
+            .Where(finfo => !finfo.IsLiteral) // not constants
+            .Where(finfi => !finfi.IsStatic) // not static
+            .OrderBy(finfo => finfo.GetFieldOffset())
+            .GroupBy(finfo => finfo.GetFieldOffset());
+        var unionIndex = 0;
+        foreach (var grouping in fieldGroupings)
+        {
+            var fieldOffset = grouping.Key;
+            if (offset < fieldOffset)
+            {
+                // skip these fields since they probably overlap with the previous field
+                continue;
+            }
+
+            // todo: fix vtables, we ignore them for now
+            var finfos = grouping
+                .Where((finfo) => finfo.Name.ToLower() != "vtbl" && finfo.Name.ToLower() != "vtable")
+                .OrderByDescending(Exporter.GetEffectiveFieldSize)
+                .ToList();
+
+            var unionMaxSize = 0;
+            var isUnion = finfos.Count > 1;
+            RustStruct rsTarget = this;
+
+            string? unionName = null;
+            if (isUnion)
+            {
+                unionName = GenerateNextUnionName();
+                rsTarget = new RustStruct(unionName, 0, true);
+                rustType.Module.Add(rsTarget.Name, rsTarget);
+            }
+
+            for (int i = 0; i < finfos.Count; i++)
+            {
+                var finfo = finfos[i];
+                var fieldType = finfo.FieldType;
+                var fieldSize = Exporter.GetEffectiveFieldSize(finfo);
+
+                if (!isUnion)
+                    offset = FillGaps(offset, fieldOffset, padFill);
+
+                if (offset > fieldOffset)
+                {
+                    Debug.WriteLine(
+                        $"Current offset exceeded the next field's offset (0x{offset:X} > 0x{fieldOffset:X}): {rustType}.{finfo.Name}");
+                    break;
+                }
+
+                RustTypeRef rustTypeRef;
+                if (finfo.IsFixed())
+                {
+                    var fixedType = finfo.GetFixedType();
+                    var fixedSize = finfo.GetFixedSize();
+                    EnsureForClrType(fixedType);
+
+                    rustTypeRef = new RustTypeRef(RustTypeRef.ClrToRustName(fixedType), fixedSize);
+                }
+                else
+                {
+                    rustTypeRef = new RustTypeRef(RustTypeRef.ClrToRustName(fieldType));
+                }
+
+                rsTarget.Add(RustTypeRef.SafeSnakeCase(finfo.Name), rustTypeRef,
+                    string.Format($"0x{{0:X{pad}}}", offset));
+
+                if (isUnion)
+                {
+                    unionMaxSize = Math.Max(unionMaxSize, 8);
+                    unionMaxSize = Math.Max(unionMaxSize, fieldSize);
+                }
+                else
+                {
+                    offset += fieldSize;
+                }
+            }
+
+            if (!isUnion) continue;
+            Add($"_union_0x{offset:x}", new RustTypeRef(unionName!), string.Format($"0x{{0:X{pad}}}", offset));
+            offset += unionMaxSize;
+        }
+
+        FillGaps(offset, Size, padFill);
+        rustType.Module.Add(Name, this);
+    }
+
+    public string GetUnionName(int unionIndex)
+    {
+        if (IsUnion) throw new Exception("Cannot get union name for union structure!");
+        if (unionIndex < 0) throw new ArgumentOutOfRangeException(nameof(unionIndex));
+
+        var unionSuffix = "_Union";
+        if (unionIndex > 0)
+        {
+            unionSuffix += $"_{unionIndex}";
+        }
+
+        return Name + unionSuffix;
+    }
+
+    private string GenerateNextUnionName()
+    {
+        return GetUnionName(UnionCount++);
+    }
+
+    public override int MarkAsCopyTainted(RustTypeRef? cause = null)
+    {
+        _derive = DERIVE_CLONE;
+
+        var tainted = 0;
+        for (int i = 0; i < UnionCount; i++)
+        {
+            tainted += Get(GetUnionName(i)).MarkAsCopyTainted(this);
+        }
+
+        // all types must implement Copy in unions, so if this is a union, we need to
+        // ensure that all members implement Copy, or if they don't (aka they are copy tainted),
+        // wrap them in ManuallyDrop
+        if (IsUnion)
+        {
+            foreach (var member in _members)
+            {
+                if (member.TypeRef.Name.StartsWith("std::mem::ManuallyDrop")) continue;
+
+                var decl = Get(member.TypeRef.Name);
+                if (decl.IsCopyTainted)
+                {
+                    member.TypeRef = member.TypeRef.Clone($"std::mem::ManuallyDrop<{member.TypeRef.Name}>");
+                }
+            }
+        }
+
+        return base.MarkAsCopyTainted(this) + tainted;
+    }
+
     public void Add(string name, RustTypeRef rustTypeRef, string? prefixComment = null, string? suffixComment = null)
     {
-        var sb = new StringBuilder();
-
-        if (prefixComment != null)
+        // ugly hack for AgentContext
+        if (rustTypeRef.Name.EndsWith("system::drawing::Point"))
         {
-            sb.Append("/* ");
-            sb.Append(prefixComment);
-            sb.Append("*/ ");
+            AddInternal($"{name}_x", new RustTypeRef("i32"), $"hack({name})", suffixComment);
+            AddInternal($"{name}_y", new RustTypeRef("i32"), $"hack({name})", suffixComment);
         }
-
-        sb.Append(name);
-        sb.Append(": ");
-        sb.Append(rustTypeRef);
-        
-        if (suffixComment != null)
+        else
         {
-            sb.Append(" /* ");
-            sb.Append(suffixComment);
-            sb.Append("*/");
+            AddInternal(name, rustTypeRef, prefixComment, suffixComment);
         }
-        
-        Add(sb.ToString());
     }
-    
-    private void Add(string member)
+
+    private void AddInternal(string name, RustTypeRef rustTypeRef, string? prefixComment = null,
+        string? suffixComment = null)
     {
-        _members.Add(member);
-
-        if (member.Contains("cpp_std::Deque")
-            || member.Contains("cpp_std::Map")
-            || member.Contains("cpp_std::Set")
-            || member.Contains("cpp_std::Vector"))
-        {
-            // these cpp_std types don't implement Copy, so we can't derive Copy for the struct
-            _derive = DERIVE_CLONE;
-        }
-
-        if (member.Contains("_union_") || member.Contains("hk"))
-        {
-            // handles references where the type is a union type that contains a reference to a non-copy std type
-            // also, assume the worst for lolhavok
-            // todo: this is a hack, fix this
-            _derive = DERIVE_CLONE;
-        }
+        _members.Add(new Member(name, rustTypeRef, prefixComment, suffixComment));
     }
-    
+
     public override void Export(StringBuilder builder, int indentLevel)
     {
         var type = IsUnion ? "union" : "struct";
         var sizeComment = IsUnion ? "" : $" /* Size=0x{Size:X} */";
         if (Size == 0)
         {
-            if (_members.TrueForAll(m => m.Contains("PhantomData")))
+            if (_members.TrueForAll(m => m.TypeRef.Name.Contains("PhantomData")))
             {
                 // this is a generic type with parameters
                 sizeComment = " /* Size=unknown (generic type with parameters) */";
             }
         }
-        
+
         builder.AppendLine($"{Exporter.Indent(indentLevel)}#[repr(C)]");
-        builder.AppendLine($"{Exporter.Indent(indentLevel)}{_derive}");
+
+        var shouldDerive = !IsUnion || !_members.Any(m => m.TypeRef.Name.StartsWith("std::mem::ManuallyDrop<"));
+        shouldDerive &= !SpecialCaseNoDerive.Contains(Name);
+        if (shouldDerive)
+        {
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}{_derive}");
+        }
+
         if (_members.Count == 0)
         {
-            builder.AppendLine($"{Exporter.Indent(indentLevel)}pub {type} {Name};{sizeComment}");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}pub {type} {BaseName};{sizeComment}");
         }
         else
         {
-            builder.AppendLine($"{Exporter.Indent(indentLevel)}pub {type} {Name} {{{sizeComment}");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}pub {type} {BaseName} {{{sizeComment}");
             foreach (var member in _members)
             {
                 builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}{member},");
             }
 
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
+        }
+    }
+
+    public int FillGaps(int offset, int maxOffset, string padFill)
+    {
+        int gap;
+        while ((gap = maxOffset - offset) > 0)
+        {
+            if (offset % 8 == 0 && gap >= 8)
+            {
+                var gapDiv = gap - (gap % 8);
+                Add($"_gap_0x{offset:x}", new RustTypeRef("u8", gapDiv), padFill);
+                offset += gapDiv;
+            }
+            else if (offset % 4 == 0 && gap >= 4)
+            {
+                Add($"_gap_0x{offset:x}", new RustTypeRef("u8", 4), padFill);
+                offset += 4;
+            }
+            else if (offset % 2 == 0 && gap >= 2)
+            {
+                Add($"_gap_0x{offset:x}", new RustTypeRef("u8", 2), padFill);
+                offset += 2;
+            }
+            else
+            {
+                Add($"_gap_0x{offset:x}", new RustTypeRef("u8"), padFill);
+                offset += 1;
+            }
+        }
+
+        return offset;
+    }
+
+    public static int SizeOf(Type type)
+    {
+        // Marshal.SizeOf doesn't work correctly because the assembly is unmarshaled, and more specifically, it sets bools as 4 bytes long...
+        return (int?)typeof(Unsafe).GetMethod("SizeOf")?.MakeGenericMethod(type).Invoke(null, null) ?? 0;
+    }
+
+    private record Member(string Name, RustTypeRef TypeRef, string? PrefixComment, string? SuffixComment)
+    {
+        public string Name = Name;
+        public RustTypeRef TypeRef = TypeRef;
+        public string? PrefixComment = PrefixComment;
+        public string? SuffixComment = SuffixComment;
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+
+            if (PrefixComment != null)
+            {
+                sb.Append("/* ");
+                sb.Append(PrefixComment);
+                sb.Append(" */ ");
+            }
+
+            sb.Append(Name);
+            sb.Append(": ");
+            sb.Append(TypeRef);
+
+            if (SuffixComment != null)
+            {
+                sb.Append(" /* ");
+                sb.Append(SuffixComment);
+                sb.Append(" */");
+            }
+
+            return sb.ToString();
         }
     }
 }

@@ -6,7 +6,11 @@ namespace RustExporter;
 public class RustTypeRef
 {
     private const int NotArray = -1;
+    private const string CrateRef = "crate";
+    private const string StdRef = "std";
     
+    // thanks, copilot :^)
+    // yes I know some of these are likely wrong, no I do not care, next question
     private static readonly ImmutableHashSet<string> RustKeywords = ImmutableHashSet.Create(new[]
     {
         "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for", "if", "impl",
@@ -19,25 +23,76 @@ public class RustTypeRef
     public string Name { get; }
     public string BaseName => Name.Split("::")[^1];
     public int ArraySize { get; } = NotArray;
+    public int PointerDepth { get; internal set; } = 0; // todo: do we need this?
+    public RustModule Module { get; }
+    public RustTypeDecl Declaration => RustTypeDecl.Get(Name);
 
-    public RustTypeRef(string name)
+    public RustTypeRef(string rustName) : this(rustName, NotArray)
     {
-        Name = name;
     }
-    
-    public RustTypeRef(string name, int arraySize)
+
+    public RustTypeRef(string rustName, int arraySize)
     {
-        Name = name;
+        var split = rustName.Split(' ');
+        for (var i = 0; i < split.Length; i++)
+        {
+            if (split[i].StartsWith("*"))
+            {
+                PointerDepth++;
+                if (PointerDepth > 2)
+                {
+                    // todo: 3-depth pointers exist, re-evaluate this?
+                    // throw new Exception("Pointer depth too high: " + rustName);
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // join the split back together, but start at index PointerDepth
+        Name = string.Join(' ', split[PointerDepth..]);
         ArraySize = arraySize;
+        
+        // traverse to find the root module and ensure it exists
+        var components = Name.Split("<")[0].Split("::");
+        RustModule module = RustRootModule.Instance;
+        for (var i = 0; i < components.Length - 1; i++)
+        {
+            if (i == 0)
+            {
+                if (components[i] == CrateRef) continue;
+                if (components[i] == StdRef) break;
+            }
+            
+            module = module.GetOrAddModule(components[i]);
+        }
+
+        Module = module;
     }
     
     public override string ToString()
     {
-        return ArraySize >= 0 ? $"[{Name}; 0x{ArraySize:X}]" : Name;
+        var ptr = "";
+        for (var i = 0; i < PointerDepth; i++)
+        {
+            ptr = "*mut " + ptr;
+        }
+        return ArraySize >= 0 ? $"{ptr}[{Name}; 0x{ArraySize:X}]" : $"{ptr}{Name}";
     }
 
-    public static implicit operator RustTypeRef(RustStruct rs) => new(rs.Name);
-    public static implicit operator RustTypeRef(RustEnum re) => new(re.Name);
+    public RustTypeRef Clone(string? nameOverride = null)
+    {
+        var clone = new RustTypeRef(nameOverride ?? Name, ArraySize)
+        {
+            PointerDepth = PointerDepth
+        };
+        
+        return clone;
+    }
+    
+    public static implicit operator RustTypeRef(RustTypeDecl decl) => new(decl.Name);
     
     public static implicit operator RustTypeRef(Type clrType) => FromClrType(clrType);
 
@@ -78,6 +133,12 @@ public class RustTypeRef
         return built;
     }
 
+    public static string RustNameWithoutGeneric(string rustName)
+    {
+        var index = rustName.IndexOf('<');
+        return index == -1 ? rustName : rustName[..index] + "<>";
+    }
+    
     public static RustTypeRef FromClrType(Type type)
     {
         return FromClrType(type, type.IsArray ? 1 : NotArray);
@@ -85,42 +146,44 @@ public class RustTypeRef
     
     public static RustTypeRef FromClrType(Type type, int arraySize)
     {
-        return new(ClrToRustName(type), NotArray);
+        return new(ClrToRustName(type), arraySize);
     }
     
-    public static string ClrToRustName(Type type)
+    public static string ClrToRustName(Type type, bool stripGenericParams = false)
     {
-        if (type == typeof(void))
-        {
-            // probably a return value
-            return "()";
-        }
-
-        if (type == typeof(void*)) return "*mut std::ffi::c_void";
-        if (type == typeof(void**)) return "*mut *mut std::ffi::c_void";
-        if (type == typeof(char) || type == typeof(byte) || type == typeof(sbyte)) return "i8";
-        if (type == typeof(char*) || type == typeof(byte*)) return "*mut i8";
-        if (type == typeof(char**) || type == typeof(byte**)) return "*mut *mut i8";
-        if (type == typeof(bool)) return "bool";
-        if (type == typeof(float)) return "f32";
-        if (type == typeof(double)) return "f64";
-        if (type == typeof(short)) return "i16";
-        if (type == typeof(int)) return "i32";
-        if (type == typeof(long)) return "i64";
-        if (type == typeof(ushort)) return "u16";
-        if (type == typeof(uint)) return "u32";
-        if (type == typeof(ulong)) return "u64";
-        if (type == typeof(IntPtr)) return "*mut usize"; // todo?
-        if (type == typeof(short*)) return "*mut i16";
-        if (type == typeof(ushort*)) return "*mut u16";
-        if (type == typeof(int*)) return "*mut i32";
-        if (type == typeof(uint*)) return "*mut u32";
-        if (type == typeof(Single*)) return "*mut f32";
-
-        return FixComplexTypeName(type);
+        var primitiveRef = RustPrimitive.ReferenceFor(type);
+        return primitiveRef != null ? primitiveRef.ToString() : FixComplexTypeName(type, stripGenericParams);
+        // if (type == typeof(void))
+        // {
+        //     // probably a return value
+        //     return "()";
+        // }
+        //
+        // if (type == typeof(void*)) return "*mut std::ffi::c_void";
+        // if (type == typeof(void**)) return "*mut *mut std::ffi::c_void";
+        // if (type == typeof(char) || type == typeof(byte) || type == typeof(sbyte)) return "i8";
+        // if (type == typeof(char*) || type == typeof(byte*)) return "*mut i8";
+        // if (type == typeof(char**) || type == typeof(byte**)) return "*mut *mut i8";
+        // if (type == typeof(bool)) return "bool";
+        // if (type == typeof(float)) return "f32";
+        // if (type == typeof(double)) return "f64";
+        // if (type == typeof(short)) return "i16";
+        // if (type == typeof(int)) return "i32";
+        // if (type == typeof(long)) return "i64";
+        // if (type == typeof(ushort)) return "u16";
+        // if (type == typeof(uint)) return "u32";
+        // if (type == typeof(ulong)) return "u64";
+        // if (type == typeof(IntPtr)) return "*mut usize"; // todo?
+        // if (type == typeof(short*)) return "*mut i16";
+        // if (type == typeof(ushort*)) return "*mut u16";
+        // if (type == typeof(int*)) return "*mut i32";
+        // if (type == typeof(uint*)) return "*mut u32";
+        // if (type == typeof(Single*)) return "*mut f32";
+        //
+        // return FixComplexTypeName(type, stripGenericParams);
     }
     
-    private static string FixComplexTypeName(Type type)
+    private static string FixComplexTypeName(Type type, bool stripGenericParams)
     {
         string fullName;
         var isPrimitive = false;
@@ -139,8 +202,7 @@ public class RustTypeRef
             }
             else
             {
-                fullName = generic.FullName.Split('`')[0];
-                // if (isPointer) fullName = "*mut " + fullName;
+                fullName = generic.GetFullNameWithoutGenericArity();
                 if (dereferenced.IsNested)
                 {
                     fullName += '+' + generic.FullName.Split('+')[1].Split('[')[0];
@@ -148,7 +210,7 @@ public class RustTypeRef
 
                 fullName += '<';
 
-                if (dereferenced.GenericTypeArguments.Length > 0)
+                if (dereferenced.GenericTypeArguments.Length > 0 && !stripGenericParams)
                 {
                     var fixedNames = new List<string>();
                     foreach (var argType in dereferenced.GenericTypeArguments)
@@ -167,7 +229,6 @@ public class RustTypeRef
             fullName = type.FullName;
         }
 
-        // Console.WriteLine("FULL: " + fullName);
         if (fullName.StartsWith(Exporter.FFXIVNamespacePrefix))
         {
             fullName = fullName.Remove(0, Exporter.FFXIVNamespacePrefix.Length);

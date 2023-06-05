@@ -33,9 +33,37 @@ public class RustModule : IRustExportable
             _members.Add(name, rs);
         }
     }
-    
+
+    private bool IsEffectivelyEmpty => _members.Count == 0 || _members.All(x => x.Value is RustModule
+    {
+        IsEffectivelyEmpty: true
+    });
+
+    public IEnumerable<RustStruct> GetAllStructsRecursive()
+    {
+        foreach (var member in _members)
+        {
+            if (member.Value is RustStruct rs)
+            {
+                yield return rs;
+            }
+            else if (member.Value is RustModule rm)
+            {
+                foreach (var subMember in rm.GetAllStructsRecursive())
+                {
+                    yield return subMember;
+                }
+            }
+        }
+    }
+
     public virtual void Export(StringBuilder builder, int indentLevel)
     {
+        if (IsEffectivelyEmpty)
+        {
+            return;
+        }
+        
         var name = RustTypeRef.SafeSnakeCase(Name);
         
         builder.AppendLine($"{Exporter.Indent(indentLevel)}pub mod {name} {{");
