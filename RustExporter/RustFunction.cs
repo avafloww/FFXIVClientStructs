@@ -23,12 +23,8 @@ public class RustFunction : IRustExportable
     public void Export(StringBuilder builder, int indentLevel)
     {
         builder.AppendLine($"{Exporter.Indent(indentLevel)}pub struct {GeneratedName};");
-        builder.AppendLine($"{Exporter.Indent(indentLevel)}impl {GeneratedName} {{");
-        builder.AppendLine(
-            $"{Exporter.Indent(indentLevel + 1)}/// Returns a string containing the signature of this function.");
-        builder.AppendLine(
-            $"{Exporter.Indent(indentLevel + 1)}/// If this function does not have a signature, returns `None`.");
-        builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}pub fn signature() -> Option<&'static str> {{");
+        builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::GameFunction for {GeneratedName} {{");
+        builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn signature() -> Option<&'static str> {{");
         if (Signature != null)
         {
             builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}Some(\"{Signature}\")");
