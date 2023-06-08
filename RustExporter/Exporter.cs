@@ -1,11 +1,7 @@
-﻿using System.Collections.Immutable;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace RustExporter;
 
@@ -57,7 +53,7 @@ public class Exporter
     public string Export()
     {
         PopulatePrimitives();
-        
+
         var header = new StringBuilder();
         var definedTypes = GetExportableTypes(nameof(FFXIVClientStructs));
 
@@ -69,7 +65,7 @@ public class Exporter
         }
 
         RustRootModule.Instance.ProcessCopyTaints();
-        
+
         RustRootModule.Instance.Export(header, 0);
 
         return header.ToString();
@@ -81,10 +77,10 @@ public class Exporter
     {
         new RustPrimitive("()", typeof(void)); // probably a return value (or lack thereof)
         new RustPrimitive("std::ffi::c_void", null, typeof(void*), typeof(void**));
-        new RustPrimitive("i8", 
-            new []{typeof(char), typeof(sbyte)},
-            new []{typeof(char*), typeof(sbyte*)},
-            new []{typeof(char**), typeof(sbyte**)}
+        new RustPrimitive("i8",
+            new[] { typeof(char), typeof(sbyte) },
+            new[] { typeof(char*), typeof(sbyte*) },
+            new[] { typeof(char**), typeof(sbyte**) }
         );
         new RustPrimitive("bool", typeof(bool));
         new RustPrimitive("f32", typeof(float), typeof(float*));
@@ -97,11 +93,11 @@ public class Exporter
         new RustPrimitive("u32", typeof(uint), typeof(uint*));
         new RustPrimitive("u64", typeof(ulong));
         new RustPrimitive("usize", null, typeof(IntPtr)); // todo?
-        
+
         // objectively not primitives, but count as primitives for our purposes
         new RustPrimitive("std::marker::PhantomData<>", false);
         new RustPrimitive("std::mem::ManuallyDrop<>", false);
-        
+
         // these cpp_std types don't implement Copy, so mark them as copy-tainted
         new RustPrimitive("crate::cpp_std::Map<>", true);
         new RustPrimitive("crate::cpp_std::Deque<>", true);
@@ -109,59 +105,6 @@ public class Exporter
         new RustPrimitive("crate::cpp_std::Set<>", true);
     }
 #pragma warning restore CA1806
-
-    private void ProcessType(Type type)
-    {
-        // get the parent RustModule by iterating through the components of the namespace
-        RustModule module = RustRootModule.Instance;
-        var fullName = type.FullName;
-        // if (fullName.Contains(" "))
-        // {
-        //     Console.WriteLine("LMAOWUT: " + fullName);
-        //     return;
-        // }
-
-        if (fullName.StartsWith(FFXIVNamespacePrefix))
-        {
-            fullName = "ffxiv." + fullName.Remove(0, FFXIVNamespacePrefix.Length);
-        }
-        else if (fullName.StartsWith(HavokNamespacePrefix))
-        {
-            fullName = "havok." + fullName.Remove(0, HavokNamespacePrefix.Length);
-        }
-        else
-        {
-            // Interop / C++ STL types that we don't want to export
-            return;
-        }
-
-        var components = fullName.Split('`')[0].Split('.');
-        for (var i = 0; i < components.Length - 1; i++)
-        {
-            module = module.GetOrAddModule(components[i]);
-        }
-
-        if (type.IsFixedBuffer())
-        {
-            return;
-        }
-        else if (type.IsEnum)
-        {
-            // ProcessEnum(type, module);
-        }
-        else if (type.IsStruct())
-        {
-            // ProcessStruct(type, module);
-        }
-        else if (type.IsPrimitive)
-        {
-            // ProcessPrimitive(type);
-        }
-        else
-        {
-            Debug.WriteLine($"Unhandled type: {type.FullName}");
-        }
-    }
 
     public static int GetEffectiveFieldSize(FieldInfo finfo)
     {
@@ -171,11 +114,11 @@ public class Exporter
             var fixedSize = finfo.GetFixedSize();
             return RustStruct.SizeOf(fixedType) * fixedSize;
         }
-        
+
         if (finfo.FieldType.IsPointer) return 8;
         if (finfo.FieldType.IsEnum) return RustStruct.SizeOf(Enum.GetUnderlyingType(finfo.FieldType));
         if (finfo.FieldType.IsGenericType) return Marshal.SizeOf(Activator.CreateInstance(finfo.FieldType));
-        
+
         return RustStruct.SizeOf(finfo.FieldType);
     }
 

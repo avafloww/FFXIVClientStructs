@@ -1,7 +1,7 @@
-﻿using System.Collections.Immutable;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
+using FFXIVClientStructs.Interop.Attributes;
 
 namespace RustExporter;
 
@@ -12,7 +12,8 @@ public class RustStruct : RustTypeDecl
 
     // a hack to work around a #[derive(Clone)] issue for some structs
     // could probably fix this properly but I'm convinced it's much more work than it's worth
-    private static readonly string[] SpecialCaseNoDerive = {
+    private static readonly string[] SpecialCaseNoDerive =
+    {
         "crate::ffxiv::client::ui::misc::ItemOrderModule_Union",
         "crate::ffxiv::client::ui::misc::ItemOrderModule",
         "crate::ffxiv::client::system::resource::ResourceGraph_CategoryContainer",
@@ -25,6 +26,7 @@ public class RustStruct : RustTypeDecl
     public IEnumerable<RustTypeRef> TypeRefs => _members.Select(m => m.TypeRef);
 
     private readonly List<Member> _members = new();
+    private readonly List<RustFunction> _functions = new();
     private string _derive = DERIVE_COPY_CLONE;
 
     private RustStruct(string name, int size, bool isUnion = false) : base(name, new RustTypeRef(name).Module)
@@ -72,11 +74,10 @@ public class RustStruct : RustTypeDecl
             Size = SizeOf(clrType);
         }
 
-        // var rs = new RustStruct(typeName, structSize);
-
         var pad = Size.ToString("X").Length;
         var padFill = new string(' ', pad + 2);
 
+        // export fields
         var offset = 0;
         var fieldGroupings = clrType.GetFields()
             .Where(finfo => !Attribute.IsDefined(finfo, typeof(ObsoleteAttribute)))
@@ -162,6 +163,18 @@ public class RustStruct : RustTypeDecl
         }
 
         FillGaps(offset, Size, padFill);
+
+        // export methods
+        var methods = clrType.GetMethods()
+            .Where(m => !Attribute.IsDefined(m, typeof(ObsoleteAttribute)))
+            .Where(m => Attribute.IsDefined(m, typeof(MemberFunctionAttribute)));
+
+        foreach (var method in methods)
+        {
+            var function = new RustFunction(this, method);
+            _functions.Add(function);
+        }
+
         rustType.Module.Add(Name, this);
     }
 
@@ -268,6 +281,24 @@ public class RustStruct : RustTypeDecl
                 builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}{member},");
             }
 
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
+        }
+
+        // export all functions
+        if (_functions.Count > 0 && !IsUnion)
+        {
+            foreach (var function in _functions)
+            {
+                function.Export(builder, indentLevel);
+            }
+
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl {BaseName} {{");
+            foreach (var function in _functions)
+            {
+                builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}pub fn {function.Name}() -> {function.GeneratedName} {{");
+                builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}{function.GeneratedName}");
+                builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
+            }
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
     }
