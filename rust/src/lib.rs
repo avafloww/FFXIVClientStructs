@@ -50,20 +50,9 @@ impl MemberFunctionSignature {
     }
 }
 
-// marker trait for member functions
-pub trait ResolvableMemberFunction: Addressable {}
-
-pub trait SignatureResolvableMemberFunction: ResolvableMemberFunction {
+pub trait ResolvableMemberFunction: Addressable {
     /// The signature of this function.
     const SIGNATURE: MemberFunctionSignature;
-}
-
-pub trait VirtualResolvableMemberFunction: ResolvableMemberFunction {
-    /// The index of this function in the parent vtable.
-    const VIRTUAL_INDEX: usize;
-    
-    /// Returns the parent vtable address of this function.
-    fn vtable_address() -> Option<*const usize>;
 }
 
 pub type MemberFunctionResolver = fn(&MemberFunctionSignature) -> Option<*const usize>;
@@ -108,8 +97,11 @@ pub trait ResolvableVTable: Addressable {
 }
 pub type VTableResolver = fn(&VTableSignature) -> Option<*const usize>;
 
-// {
-//         let ptr = VTABLE_GAME_CLASS.expect("vtbl not resolved").offset(69);
-//         let func: extern "C" fn(T1) = std::mem::transmute(ptr);
-//         func(t1);
-//     }
+// for functions identified by their index in a vtable
+pub trait ResolvableVirtualFunction: Addressable {
+    /// The index of this function in the parent vtable.
+    const VIRTUAL_INDEX: usize;
+
+    /// Returns the vtable address of this function's owning type.
+    fn vtable_address() -> Option<*const usize>;
+}

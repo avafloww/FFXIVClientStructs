@@ -5,9 +5,10 @@ namespace RustExporter;
 public abstract class RustTypeDecl : IRustExportable
 {
     private static readonly Dictionary<string, RustTypeDecl> TypeRegistry = new();
+
     // keep track of types that are Copy-tainted (aka, do not derive Copy, or touch something that doesn't derive Copy)
     private static readonly HashSet<string> CopyTaintedTypes = new();
-    
+
     public string Name { get; protected set; }
     public string BaseName => Exporter.GetBaseName(Name);
     public bool IsCopyTainted => CopyTaintedTypes.Contains(Name);
@@ -17,7 +18,7 @@ public abstract class RustTypeDecl : IRustExportable
     {
         Name = name;
         Module = module;
-        
+
         TypeRegistry.Add(name, this);
     }
 
@@ -30,14 +31,14 @@ public abstract class RustTypeDecl : IRustExportable
     {
         if (TypeRegistry.TryGetValue(RustTypeRef.RustNameWithoutGeneric(rustName), out var decl))
             return decl;
-        
+
         throw new Exception($"Type with Rust name {RustTypeRef.RustNameWithoutGeneric(rustName)} not found");
     }
 
     public static void EnsureForClrType(Type type)
     {
         if (type.IsPrimitive || type.IsFixedBuffer()) return;
-        
+
         var target = type;
         if (type.IsPointer)
         {
@@ -47,13 +48,13 @@ public abstract class RustTypeDecl : IRustExportable
         }
 
         var fullTypeName = RustTypeRef.ClrToRustName(target, true);
-        
+
         if (TypeRegistry.ContainsKey(fullTypeName))
             return;
-        
+
         if (type.IsEnum) TypeRegistry[fullTypeName] = new RustEnum(type);
         else TypeRegistry[fullTypeName] = new RustStruct(type);
     }
-    
+
     public abstract void Export(StringBuilder builder, int indentLevel);
 }

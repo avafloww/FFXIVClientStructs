@@ -8,18 +8,21 @@ public static class FieldInfoExtensions
 {
     public static bool IsFixed(this FieldInfo finfo)
     {
-        var attr = finfo.GetCustomAttributes(typeof(FixedBufferAttribute), false).Cast<FixedBufferAttribute>().FirstOrDefault();
+        var attr = finfo.GetCustomAttributes(typeof(FixedBufferAttribute), false).Cast<FixedBufferAttribute>()
+            .FirstOrDefault();
         return attr != null;
     }
 
     public static Type GetFixedType(this FieldInfo finfo)
     {
-        return finfo.GetCustomAttributes(typeof(FixedBufferAttribute), false).Cast<FixedBufferAttribute>().Single().ElementType;
+        return finfo.GetCustomAttributes(typeof(FixedBufferAttribute), false).Cast<FixedBufferAttribute>().Single()
+            .ElementType;
     }
 
     public static int GetFixedSize(this FieldInfo finfo)
     {
-        return finfo.GetCustomAttributes(typeof(FixedBufferAttribute), false).Cast<FixedBufferAttribute>().Single().Length;
+        return finfo.GetCustomAttributes(typeof(FixedBufferAttribute), false).Cast<FixedBufferAttribute>().Single()
+            .Length;
     }
 
     public static int GetFieldOffset(this FieldInfo finfo)

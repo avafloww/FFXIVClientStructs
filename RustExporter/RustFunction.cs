@@ -11,8 +11,9 @@ public class RustFunction : IRustExportable
     public string GeneratedName => $"{Owner.BaseName}_Fn_{OriginalName}";
     public string FullGeneratedName => $"{Owner.Module.FullName}::{GeneratedName}";
     public RustStruct Owner { get; }
-    public string? Signature { get; }
-    public uint? VirtualIndex { get; }
+    public MemberFunctionAttribute? MemberFunction { get; }
+    public VirtualFunctionAttribute? VirtualFunction { get; }
+    public StaticAddressAttribute? StaticAddress { get; }
     private readonly MethodInfo _clrMethod;
 
     public RustFunction(RustStruct owner, MethodInfo method)
@@ -23,8 +24,9 @@ public class RustFunction : IRustExportable
         Name = RustTypeRef.SafeSnakeCase(method.Name);
         OriginalName = method.Name;
 
-        Signature = method.GetCustomAttribute<MemberFunctionAttribute>()?.Signature;
-        VirtualIndex = method.GetCustomAttribute<VirtualFunctionAttribute>()?.Index;
+        MemberFunction = method.GetCustomAttribute<MemberFunctionAttribute>();
+        VirtualFunction = method.GetCustomAttribute<VirtualFunctionAttribute>();
+        StaticAddress = method.GetCustomAttribute<StaticAddressAttribute>();
     }
 
     public void Export(StringBuilder builder, int indentLevel)
@@ -46,31 +48,37 @@ public class RustFunction : IRustExportable
         builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
         builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
 
-        // ResolvableMemberFunction (currently a marker trait, but may change in the future)
-        builder.AppendLine(
-            $"{Exporter.Indent(indentLevel)}impl crate::ResolvableMemberFunction for {GeneratedName} {{}}");
-
-        // SignatureResolvableMemberFunction
-        if (Signature != null)
+        // ResolvableMemberFunction
+        if (MemberFunction != null)
         {
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel)}impl crate::SignatureResolvableMemberFunction for {GeneratedName} {{");
+                $"{Exporter.Indent(indentLevel)}impl crate::ResolvableMemberFunction for {GeneratedName} {{");
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::MemberFunctionSignature = crate::MemberFunctionSignature::new(\"{Signature}\");");
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::MemberFunctionSignature = crate::MemberFunctionSignature::new(\"{MemberFunction.Signature}\");");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
-        // VirtualResolvableMemberFunction
-        if (VirtualIndex != null && Owner.VTableSignature != null)
+        // ResolvableVirtualFunction
+        if (VirtualFunction != null)
         {
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel)}impl crate::VirtualResolvableMemberFunction for {GeneratedName} {{");
+                $"{Exporter.Indent(indentLevel)}impl crate::ResolvableVirtualFunction for {GeneratedName} {{");
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 1)}const VIRTUAL_INDEX: usize = {VirtualIndex};");
+                $"{Exporter.Indent(indentLevel + 1)}const VIRTUAL_INDEX: usize = {VirtualFunction.Index};");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn vtable_address() -> Option<*const usize> {{");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}use crate::Addressable;");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}{Owner.Name}::address()");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
+        }
+
+        // ResolvableStaticAddress
+        if (StaticAddress != null)
+        {
+            builder.AppendLine(
+                $"{Exporter.Indent(indentLevel)}impl crate::ResolvableStaticAddress for {GeneratedName} {{");
+            builder.AppendLine(
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::StaticAddressSignature = crate::StaticAddressSignature::new(\"{StaticAddress.Signature}\", {StaticAddress.Offset}, {StaticAddress.IsPointer.ToString().ToLowerInvariant()});");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
@@ -98,10 +106,12 @@ public class RustFunction : IRustExportable
             if (withNames && withTypes)
             {
                 rustParams.Add("&mut self");
-            } else if (withNames)
+            }
+            else if (withNames)
             {
                 rustParams.Add("self as *mut Self");
-            } else if (withTypes)
+            }
+            else if (withTypes)
             {
                 rustParams.Add("*mut Self");
             }

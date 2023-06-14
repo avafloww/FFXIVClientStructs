@@ -5,7 +5,7 @@ namespace RustExporter;
 public sealed class RustPrimitive : RustTypeDecl
 {
     private static readonly List<RustPrimitive> Primitives = new();
-    
+
     public Type[] ClrTypes { get; }
     public Type[] ClrPtrTypes { get; }
     public Type[] ClrDoublePtrTypes { get; }
@@ -26,10 +26,10 @@ public sealed class RustPrimitive : RustTypeDecl
         ClrTypes = clrTypes;
         ClrPtrTypes = clrPtrTypes ?? Array.Empty<Type>();
         ClrDoublePtrTypes = clrDoublePtrTypes ?? Array.Empty<Type>();
-        
+
         Primitives.Add(this);
     }
-    
+
     public RustPrimitive(string rustName, bool isCopyTainted)
         : base(rustName, RustRootModule.Instance)
     {
@@ -63,7 +63,7 @@ public sealed class RustPrimitive : RustTypeDecl
 
             var typeRef = new RustTypeRef(primitive.Name);
             typeRef.PointerDepth = pointerDepth;
-            
+
             return typeRef;
         }
 

@@ -46,7 +46,7 @@ public class RustStruct : RustTypeDecl
     internal RustStruct(RustTypeRef rustType, Type clrType) : base(rustType.Name, rustType.Module)
     {
         OriginalClrType = clrType;
-        
+
         if (clrType.IsGenericType)
         {
             if (clrType.ContainsGenericParameters)
@@ -173,15 +173,11 @@ public class RustStruct : RustTypeDecl
         var methods = clrType.GetMethods()
             .Where(m => !Attribute.IsDefined(m, typeof(ObsoleteAttribute)));
 
-        // member functions always get exported
-        foreach (var method in methods.Where(m => Attribute.IsDefined(m, typeof(MemberFunctionAttribute))))
-        {
-            var function = new RustFunction(this, method);
-            Functions.Add(function);
-        }
-        
-        // todo: same for now
-        foreach (var method in methods.Where(m => Attribute.IsDefined(m, typeof(VirtualFunctionAttribute))))
+        // export functions
+        foreach (var method in methods.Where(m =>
+                     Attribute.IsDefined(m, typeof(MemberFunctionAttribute)) ||
+                     Attribute.IsDefined(m, typeof(VirtualFunctionAttribute)) ||
+                     Attribute.IsDefined(m, typeof(StaticAddressAttribute))))
         {
             var function = new RustFunction(this, method);
             Functions.Add(function);

@@ -56,7 +56,7 @@ public class Exporter
 
         var header = new StringBuilder();
         var definedTypes = GetExportableTypes(nameof(FFXIVClientStructs));
-        
+
         foreach (var type in definedTypes)
         {
             RustTypeDecl.EnsureForClrType(type);

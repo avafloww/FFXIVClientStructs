@@ -15,7 +15,7 @@ public class RustModule : IRustExportable
         Parent = parent;
         Name = name;
     }
-    
+
     public RustModule GetOrAddModule(string name)
     {
         if (_members.TryGetValue(name, out var member))
@@ -24,7 +24,7 @@ public class RustModule : IRustExportable
             {
                 return module;
             }
-            
+
             throw new Exception($"Member {name} is not a module");
         }
         else
@@ -34,7 +34,7 @@ public class RustModule : IRustExportable
             return module;
         }
     }
-    
+
     public void Add(string name, IRustExportable rs)
     {
         if (!_members.ContainsKey(name))
@@ -65,21 +65,22 @@ public class RustModule : IRustExportable
             }
         }
     }
-    
+
     public virtual void Export(StringBuilder builder, int indentLevel)
     {
         if (IsEffectivelyEmpty)
         {
             return;
         }
-        
+
         var name = RustTypeRef.SafeSnakeCase(Name);
-        
+
         builder.AppendLine($"{Exporter.Indent(indentLevel)}pub mod {name} {{");
         foreach (var member in _members)
         {
             member.Value.Export(builder, indentLevel + 1);
         }
+
         builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
     }
 }

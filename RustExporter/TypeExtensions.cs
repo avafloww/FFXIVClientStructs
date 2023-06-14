@@ -8,14 +8,14 @@ public static class TypeExtensions
         var index = name.IndexOf('`');
         return index == -1 ? name : name[..index];
     }
-    
+
     public static string GetNameWithoutGenericArity(this Type t)
     {
         var name = t.Name;
         var index = name.IndexOf('`');
         return index == -1 ? name : name[..index];
     }
-    
+
     public static bool IsFixedBuffer(this Type type)
     {
         return type.Name.EndsWith("e__FixedBuffer");

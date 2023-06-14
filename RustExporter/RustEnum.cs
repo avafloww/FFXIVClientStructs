@@ -6,7 +6,7 @@ public class RustEnum : RustTypeDecl
 {
     public string UnderlyingType { get; }
     private readonly Dictionary<string, string> _members = new();
-    
+
     internal RustEnum(Type clrType) : this(clrType, clrType)
     {
     }
@@ -14,7 +14,7 @@ public class RustEnum : RustTypeDecl
     internal RustEnum(RustTypeRef rustType, Type clrType) : base(rustType.Name, rustType.Module)
     {
         UnderlyingType = RustTypeRef.ClrToRustName(clrType.GetEnumUnderlyingType());
-        
+
         try
         {
             var values = Enum.GetValues(clrType);
@@ -32,12 +32,12 @@ public class RustEnum : RustTypeDecl
 
         Module.Add(Name, this);
     }
-    
+
     public void Add(string name, string value)
     {
         _members.Add(name, value);
     }
-    
+
     public override void Export(StringBuilder builder, int indentLevel)
     {
         if (_members.Count > 0)
@@ -51,6 +51,7 @@ public class RustEnum : RustTypeDecl
         {
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}{member.Key} = {member.Value},");
         }
+
         builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
     }
 }
