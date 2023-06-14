@@ -4,8 +4,17 @@ namespace RustExporter;
 
 public class RustModule : IRustExportable
 {
-    public string Name { get; init; }
+    public RustModule? Parent { get; }
+    public string Name { get; }
     protected readonly Dictionary<string, IRustExportable> _members = new();
+
+    public string FullName => Parent == null ? Name : $"{Parent.FullName}::{Name}";
+
+    public RustModule(RustModule? parent, string name)
+    {
+        Parent = parent;
+        Name = name;
+    }
     
     public RustModule GetOrAddModule(string name)
     {
@@ -20,7 +29,7 @@ public class RustModule : IRustExportable
         }
         else
         {
-            var module = new RustModule { Name = name };
+            var module = new RustModule(this, name);
             _members.Add(name, module);
             return module;
         }
@@ -56,7 +65,7 @@ public class RustModule : IRustExportable
             }
         }
     }
-
+    
     public virtual void Export(StringBuilder builder, int indentLevel)
     {
         if (IsEffectivelyEmpty)

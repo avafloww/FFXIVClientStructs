@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using FFXIVClientStructs.Interop.Attributes;
@@ -23,16 +24,19 @@ public class RustStruct : RustTypeDecl
     public int Size { get; }
     public bool IsUnion { get; }
     public int UnionCount { get; private set; }
+    public Type? OriginalClrType { get; }
+    public VTableAddressAttribute? VTableSignature { get; }
     public IEnumerable<RustTypeRef> TypeRefs => _members.Select(m => m.TypeRef);
+    public List<RustFunction> Functions { get; } = new();
 
     private readonly List<Member> _members = new();
-    private readonly List<RustFunction> _functions = new();
     private string _derive = DERIVE_COPY_CLONE;
 
     private RustStruct(string name, int size, bool isUnion = false) : base(name, new RustTypeRef(name).Module)
     {
         Size = size;
         IsUnion = isUnion;
+        OriginalClrType = null;
     }
 
     internal RustStruct(Type clrType) : this(clrType, clrType)
@@ -41,6 +45,8 @@ public class RustStruct : RustTypeDecl
 
     internal RustStruct(RustTypeRef rustType, Type clrType) : base(rustType.Name, rustType.Module)
     {
+        OriginalClrType = clrType;
+        
         if (clrType.IsGenericType)
         {
             if (clrType.ContainsGenericParameters)
@@ -95,7 +101,6 @@ public class RustStruct : RustTypeDecl
                 continue;
             }
 
-            // todo: fix vtables, we ignore them for now
             var finfos = grouping
                 .Where((finfo) => finfo.Name.ToLower() != "vtbl" && finfo.Name.ToLower() != "vtable")
                 .OrderByDescending(Exporter.GetEffectiveFieldSize)
@@ -166,14 +171,24 @@ public class RustStruct : RustTypeDecl
 
         // export methods
         var methods = clrType.GetMethods()
-            .Where(m => !Attribute.IsDefined(m, typeof(ObsoleteAttribute)))
-            .Where(m => Attribute.IsDefined(m, typeof(MemberFunctionAttribute)));
+            .Where(m => !Attribute.IsDefined(m, typeof(ObsoleteAttribute)));
 
-        foreach (var method in methods)
+        // member functions always get exported
+        foreach (var method in methods.Where(m => Attribute.IsDefined(m, typeof(MemberFunctionAttribute))))
         {
             var function = new RustFunction(this, method);
-            _functions.Add(function);
+            Functions.Add(function);
         }
+        
+        // todo: same for now
+        foreach (var method in methods.Where(m => Attribute.IsDefined(m, typeof(VirtualFunctionAttribute))))
+        {
+            var function = new RustFunction(this, method);
+            Functions.Add(function);
+        }
+
+        // export vtable information
+        VTableSignature = clrType.GetCustomAttribute<VTableAddressAttribute>();
 
         rustType.Module.Add(Name, this);
     }
@@ -284,21 +299,48 @@ public class RustStruct : RustTypeDecl
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
-        // export all functions
-        if (_functions.Count > 0 && !IsUnion)
+        // export vtable info
+        if (VTableSignature != null)
         {
-            foreach (var function in _functions)
+            // Addressable & AddressableMut
+            builder.AppendLine(
+                $"{Exporter.Indent(indentLevel)}static mut RESOLVED_{BaseName}_VT: Option<*const usize> = None;");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::Addressable for {BaseName} {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn address() -> Option<*const usize> {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}unsafe {{ RESOLVED_{BaseName}_VT.clone() }}");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::AddressableMut for {BaseName} {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn set_address(resolved: &Option<*const usize>) {{");
+            builder.AppendLine(
+                $"{Exporter.Indent(indentLevel + 2)}unsafe {{ RESOLVED_{BaseName}_VT = resolved.clone(); }}");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
+
+            // ResolvableVTable
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::ResolvableVTable for {BaseName} {{");
+            builder.AppendLine(
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::VTableSignature = crate::VTableSignature::new(\"{VTableSignature.Signature}\", {VTableSignature.Offset}, {VTableSignature.IsPointer.ToString().ToLowerInvariant()});");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
+        }
+
+        // export all functions
+        if (Functions.Count > 0 && !IsUnion)
+        {
+            foreach (var function in Functions)
             {
                 function.Export(builder, indentLevel);
             }
 
             builder.AppendLine($"{Exporter.Indent(indentLevel)}impl {BaseName} {{");
-            foreach (var function in _functions)
+            foreach (var function in Functions)
             {
-                builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}pub fn {function.Name}() -> {function.GeneratedName} {{");
+                builder.AppendLine(
+                    $"{Exporter.Indent(indentLevel + 1)}pub fn {function.Name}() -> {function.GeneratedName} {{");
                 builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}{function.GeneratedName}");
                 builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
             }
+
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
     }

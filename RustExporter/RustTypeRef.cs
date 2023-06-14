@@ -8,7 +8,7 @@ public class RustTypeRef
     private const int NotArray = -1;
     private const string CrateRef = "crate";
     private const string StdRef = "std";
-    
+
     // thanks, copilot :^)
     // yes I know some of these are likely wrong, no I do not care, next question
     private static readonly ImmutableHashSet<string> RustKeywords = ImmutableHashSet.Create(new[]
@@ -19,7 +19,7 @@ public class RustTypeRef
         "abstract", "become", "box", "do", "final", "macro", "override", "priv", "typeof", "unsized", "virtual",
         "yield", "try"
     });
-    
+
     public string Name { get; }
     public string BaseName => Name.Split("::")[^1];
     public int ArraySize { get; } = NotArray;
@@ -54,7 +54,7 @@ public class RustTypeRef
         // join the split back together, but start at index PointerDepth
         Name = string.Join(' ', split[PointerDepth..]);
         ArraySize = arraySize;
-        
+
         // traverse to find the root module and ensure it exists
         var components = Name.Split("<")[0].Split("::");
         RustModule module = RustRootModule.Instance;
@@ -65,13 +65,13 @@ public class RustTypeRef
                 if (components[i] == CrateRef) continue;
                 if (components[i] == StdRef) break;
             }
-            
+
             module = module.GetOrAddModule(components[i]);
         }
 
         Module = module;
     }
-    
+
     public override string ToString()
     {
         var ptr = "";
@@ -79,6 +79,7 @@ public class RustTypeRef
         {
             ptr = "*mut " + ptr;
         }
+
         return ArraySize >= 0 ? $"{ptr}[{Name}; 0x{ArraySize:X}]" : $"{ptr}{Name}";
     }
 
@@ -88,12 +89,12 @@ public class RustTypeRef
         {
             PointerDepth = PointerDepth
         };
-        
+
         return clone;
     }
-    
+
     public static implicit operator RustTypeRef(RustTypeDecl decl) => new(decl.Name);
-    
+
     public static implicit operator RustTypeRef(Type clrType) => FromClrType(clrType);
 
     public static string SafeSnakeCase(string input)
@@ -124,10 +125,12 @@ public class RustTypeRef
 
         var built = sb.ToString();
 
-        // if the name matches any Rust keywords, suffix it with an underscore
+        // if the name matches any Rust keywords, escape it as a raw identifier
         if (RustKeywords.Contains(built))
         {
-            built += "_";
+            // but if it's "self", suffix it instead
+            if (built == "self") built += "_";
+            else built = "r#" + built;
         }
 
         return built;
@@ -138,63 +141,34 @@ public class RustTypeRef
         var index = rustName.IndexOf('<');
         return index == -1 ? rustName : rustName[..index] + "<>";
     }
-    
+
     public static RustTypeRef FromClrType(Type type)
     {
         return FromClrType(type, type.IsArray ? 1 : NotArray);
     }
-    
+
     public static RustTypeRef FromClrType(Type type, int arraySize)
     {
         return new(ClrToRustName(type), arraySize);
     }
-    
+
     public static string ClrToRustName(Type type, bool stripGenericParams = false)
     {
         var primitiveRef = RustPrimitive.ReferenceFor(type);
         return primitiveRef != null ? primitiveRef.ToString() : FixComplexTypeName(type, stripGenericParams);
-        // if (type == typeof(void))
-        // {
-        //     // probably a return value
-        //     return "()";
-        // }
-        //
-        // if (type == typeof(void*)) return "*mut std::ffi::c_void";
-        // if (type == typeof(void**)) return "*mut *mut std::ffi::c_void";
-        // if (type == typeof(char) || type == typeof(byte) || type == typeof(sbyte)) return "i8";
-        // if (type == typeof(char*) || type == typeof(byte*)) return "*mut i8";
-        // if (type == typeof(char**) || type == typeof(byte**)) return "*mut *mut i8";
-        // if (type == typeof(bool)) return "bool";
-        // if (type == typeof(float)) return "f32";
-        // if (type == typeof(double)) return "f64";
-        // if (type == typeof(short)) return "i16";
-        // if (type == typeof(int)) return "i32";
-        // if (type == typeof(long)) return "i64";
-        // if (type == typeof(ushort)) return "u16";
-        // if (type == typeof(uint)) return "u32";
-        // if (type == typeof(ulong)) return "u64";
-        // if (type == typeof(IntPtr)) return "*mut usize"; // todo?
-        // if (type == typeof(short*)) return "*mut i16";
-        // if (type == typeof(ushort*)) return "*mut u16";
-        // if (type == typeof(int*)) return "*mut i32";
-        // if (type == typeof(uint*)) return "*mut u32";
-        // if (type == typeof(Single*)) return "*mut f32";
-        //
-        // return FixComplexTypeName(type, stripGenericParams);
     }
-    
+
     private static string FixComplexTypeName(Type type, bool stripGenericParams)
     {
         string fullName;
         var isPrimitive = false;
         if (type.IsGenericType || (type.IsPointer && type.GetElementType().IsGenericType))
         {
-            
             // todo: fix generics
             bool isPointer = type.IsPointer;
             var dereferenced = isPointer ? type.GetElementType() : type;
             var generic = dereferenced.GetGenericTypeDefinition();
-            
+
             if (type.FullName.StartsWith(typeof(FFXIVClientStructs.Interop.Pointer<>).FullName))
             {
                 fullName = ClrToRustName(dereferenced.GenericTypeArguments[0]) + '*';
@@ -240,7 +214,7 @@ public class RustTypeRef
             fullName = fullName.Remove(0, Exporter.HavokNamespacePrefix.Length);
             fullName = "havok." + fullName;
         }
-        
+
         if (fullName.StartsWith(Exporter.STDNamespacePrefix))
         {
             // Console.WriteLine("STD:  " + fullName);
@@ -286,11 +260,6 @@ public class RustTypeRef
             {
                 fullName = string.Concat("*mut ", fullName.AsSpan(0, fullName.Length - 1));
             }
-        }
-        
-        if (type.IsPointer)
-        {
-            fullName = "*mut " + fullName;
         }
 
         return fullName;

@@ -28,13 +28,12 @@ public abstract class RustTypeDecl : IRustExportable
 
     public static RustTypeDecl Get(string rustName)
     {
-        
         if (TypeRegistry.TryGetValue(RustTypeRef.RustNameWithoutGeneric(rustName), out var decl))
             return decl;
         
         throw new Exception($"Type with Rust name {RustTypeRef.RustNameWithoutGeneric(rustName)} not found");
     }
-    
+
     public static void EnsureForClrType(Type type)
     {
         if (type.IsPrimitive || type.IsFixedBuffer()) return;
