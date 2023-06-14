@@ -9,9 +9,9 @@ pub use generated::havok;
 
 // Public API to resolve addresses for all addressable types we support.
 pub unsafe fn resolve_all(
-    vtable_resolver: &VTableResolver,
-    static_address_resolver: &StaticAddressResolver,
-    member_function_resolver: &MemberFunctionResolver,
+    vtable_resolver: VTableResolver,
+    static_address_resolver: StaticAddressResolver,
+    member_function_resolver: MemberFunctionResolver,
 ) {
     generated::resolve_vtables(&vtable_resolver);
     generated::resolve_static_addresses(&static_address_resolver);
