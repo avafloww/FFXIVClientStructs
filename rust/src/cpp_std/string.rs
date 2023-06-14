@@ -1,5 +1,4 @@
 ﻿use std::slice;
-
 use std::ptr;
 
 #[repr(C)]

@@ -1,6 +1,4 @@
-﻿
-
-use crate::cpp_std::Pair;
+﻿use crate::cpp_std::Pair;
 
 #[repr(C)]
 #[derive(Clone)]

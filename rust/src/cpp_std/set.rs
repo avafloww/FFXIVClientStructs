@@ -1,8 +1,4 @@
-﻿
-
-
-
-#[repr(C)]
+﻿#[repr(C)]
 #[derive(Clone)]
 pub struct Node<K> where K: Copy {
     left: *mut Node<K>,
