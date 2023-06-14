@@ -37,7 +37,7 @@ pub(crate) trait AddressableMut: Addressable {
 }
 
 /// Represents a signature.
-pub struct Signature(&'static str);
+pub struct Signature(pub &'static str);
 
 //
 // Member functions
