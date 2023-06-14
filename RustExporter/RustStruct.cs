@@ -19,6 +19,8 @@ public class RustStruct : RustTypeDecl
         "crate::ffxiv::client::ui::misc::ItemOrderModule",
         "crate::ffxiv::client::system::resource::ResourceGraph_CategoryContainer",
         "crate::ffxiv::client::system::resource::ResourceGraph",
+        "crate::ffxiv::component::gui::AtkStage",
+        "crate::ffxiv::component::gui::AtkValue",
     };
 
     public int Size { get; }
@@ -84,23 +86,20 @@ public class RustStruct : RustTypeDecl
         var padFill = new string(' ', pad + 2);
 
         // export fields
-        var offset = 0;
+        var offset = -1;
         var fieldGroupings = clrType.GetFields()
             .Where(finfo => !Attribute.IsDefined(finfo, typeof(ObsoleteAttribute)))
             .Where(finfo => !finfo.IsLiteral) // not constants
-            .Where(finfi => !finfi.IsStatic) // not static
+            .Where(finfo => !finfo.IsStatic) // not static
             .OrderBy(finfo => finfo.GetFieldOffset())
             .GroupBy(finfo => finfo.GetFieldOffset());
         var unionIndex = 0;
         foreach (var grouping in fieldGroupings)
         {
+            // first defined field of the class
+            if (offset == -1) offset = grouping.Key;
+            
             var fieldOffset = grouping.Key;
-            if (offset < fieldOffset)
-            {
-                // skip these fields since they probably overlap with the previous field
-                continue;
-            }
-
             var finfos = grouping
                 .Where((finfo) => finfo.Name.ToLower() != "vtbl" && finfo.Name.ToLower() != "vtable")
                 .OrderByDescending(Exporter.GetEffectiveFieldSize)
@@ -121,6 +120,8 @@ public class RustStruct : RustTypeDecl
             for (int i = 0; i < finfos.Count; i++)
             {
                 var finfo = finfos[i];
+                if (ShouldSkipField(finfo)) continue;
+
                 var fieldType = finfo.FieldType;
                 var fieldSize = Exporter.GetEffectiveFieldSize(finfo);
 
@@ -167,7 +168,7 @@ public class RustStruct : RustTypeDecl
             offset += unionMaxSize;
         }
 
-        FillGaps(offset, Size, padFill);
+        if (offset != -1) FillGaps(offset, Size, padFill);
 
         // export methods
         var methods = clrType.GetMethods()
@@ -203,6 +204,17 @@ public class RustStruct : RustTypeDecl
         return Name + unionSuffix;
     }
 
+    private bool ShouldSkipField(FieldInfo info)
+    {
+        // ugly hack to work around union fuckery in Human
+        if (info.DeclaringType == typeof(FFXIVClientStructs.FFXIV.Client.Graphics.Scene.Human))
+        {
+            return info.Name == "EquipSlotData";
+        }
+
+        return false;
+    }
+
     private string GenerateNextUnionName()
     {
         return GetUnionName(UnionCount++);
@@ -210,7 +222,7 @@ public class RustStruct : RustTypeDecl
 
     public override int MarkAsCopyTainted(RustTypeRef? cause = null)
     {
-        _derive = DERIVE_CLONE;
+        if (!IsUnion) _derive = DERIVE_CLONE;
 
         var tainted = 0;
         for (int i = 0; i < UnionCount; i++)
@@ -264,7 +276,7 @@ public class RustStruct : RustTypeDecl
         var sizeComment = IsUnion ? "" : $" /* Size=0x{Size:X} */";
         if (Size == 0)
         {
-            if (_members.TrueForAll(m => m.TypeRef.Name.Contains("PhantomData")))
+            if (_members.Count > 0 && _members.TrueForAll(m => m.TypeRef.Name.Contains("PhantomData")))
             {
                 // this is a generic type with parameters
                 sizeComment = " /* Size=unknown (generic type with parameters) */";
@@ -273,6 +285,7 @@ public class RustStruct : RustTypeDecl
 
         builder.AppendLine($"{Exporter.Indent(indentLevel)}#[repr(C)]");
 
+        // unions with manual-drop members should not derive Copy or Clone
         var shouldDerive = !IsUnion || !_members.Any(m => m.TypeRef.Name.StartsWith("std::mem::ManuallyDrop<"));
         shouldDerive &= !SpecialCaseNoDerive.Contains(Name);
         if (shouldDerive)
@@ -282,7 +295,8 @@ public class RustStruct : RustTypeDecl
 
         if (_members.Count == 0)
         {
-            builder.AppendLine($"{Exporter.Indent(indentLevel)}pub {type} {BaseName};{sizeComment}");
+            var filler = new RustTypeRef("u8", Size);
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}pub {type} {BaseName}({filler});{sizeComment}");
         }
         else
         {

@@ -47,6 +47,7 @@ public class Exporter
 
         return definedTypes
             .Where(t => t.FullName.StartsWith(FFXIVNamespacePrefix) || t.FullName.StartsWith(HavokNamespacePrefix))
+            .Where(t => t.IsEnum || t.StructLayoutAttribute?.Value != LayoutKind.Auto)
             .ToArray();
     }
 
@@ -102,6 +103,10 @@ public class Exporter
         new RustPrimitive("crate::cpp_std::Deque<>", true);
         new RustPrimitive("crate::cpp_std::Vector<>", true);
         new RustPrimitive("crate::cpp_std::Set<>", true);
+        
+        // other cpp_std types that we provide
+        new RustPrimitive("crate::cpp_std::Pair<>", false);
+        new RustPrimitive("crate::cpp_std::String", false);
     }
 #pragma warning restore CA1806
 
