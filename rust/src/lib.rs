@@ -24,12 +24,16 @@ pub unsafe fn resolve_all(
 pub trait Addressable {
     /// Returns the resolved address of this type.
     /// If the type is unresolved, `None` is returned.
-    fn address() -> Option<*const usize> where Self: Sized;
+    fn address() -> Option<*const usize>
+    where
+        Self: Sized;
 }
 
 /// Internal trait used to set the address of a type.
 pub(crate) trait AddressableMut: Addressable {
-    fn set_address(address: &Option<*const usize>) where Self: Sized;
+    fn set_address(address: &Option<*const usize>)
+    where
+        Self: Sized;
 }
 
 /// Represents a signature.
@@ -41,7 +45,7 @@ pub struct Signature(&'static str);
 
 /// Represents a signature used to resolve a function.
 pub struct MemberFunctionSignature {
-    signature: Signature,
+    pub signature: Signature,
 }
 
 impl MemberFunctionSignature {
@@ -65,9 +69,9 @@ pub type MemberFunctionResolver = fn(&MemberFunctionSignature) -> Option<*const 
 
 /// Represents a signature used to resolve a static address or vtable base.
 pub struct StaticAddressSignature {
-    signature: Signature,
-    offset: isize,
-    is_pointer: bool,
+    pub signature: Signature,
+    pub offset: isize,
+    pub is_pointer: bool,
 }
 
 impl StaticAddressSignature {
