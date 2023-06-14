@@ -61,7 +61,7 @@ pub trait ResolvableMemberFunction: Addressable {
     const SIGNATURE: MemberFunctionSignature;
 }
 
-pub type MemberFunctionResolver = fn(&MemberFunctionSignature) -> Option<*const usize>;
+pub type MemberFunctionResolver = unsafe fn(&MemberFunctionSignature) -> Option<*const usize>;
 
 //
 // Static addresses
@@ -89,7 +89,7 @@ pub trait ResolvableStaticAddress: Addressable {
     const SIGNATURE: StaticAddressSignature;
 }
 
-pub type StaticAddressResolver = fn(&StaticAddressSignature) -> Option<*const usize>;
+pub type StaticAddressResolver = unsafe fn(&StaticAddressSignature) -> Option<*const usize>;
 
 //
 // Virtual function tables (vtables)
@@ -101,7 +101,7 @@ pub trait ResolvableVTable: Addressable {
     /// The signature of this vtable.
     const SIGNATURE: VTableSignature;
 }
-pub type VTableResolver = fn(&VTableSignature) -> Option<*const usize>;
+pub type VTableResolver = unsafe fn(&VTableSignature) -> Option<*const usize>;
 
 // for functions identified by their index in a vtable
 pub trait ResolvableVirtualFunction: Addressable {
