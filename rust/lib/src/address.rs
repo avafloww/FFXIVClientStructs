@@ -24,6 +24,10 @@ pub fn get_address(key: &str) -> *const u8 {
 }
 
 fn set_address_inner(key: &str, address: *const u8) {
+    if address.is_null() {
+        return;
+    }
+
     let mut addresses = unsafe { ADDRESSES.write().unwrap() };
     match addresses.get_mut() {
         Some(map) => {
