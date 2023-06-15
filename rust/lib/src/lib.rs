@@ -20,6 +20,17 @@ pub unsafe fn resolve_all(
     generated::resolve_member_functions(&member_function_resolver);
 }
 
+#[cfg(feature = "async-resolution")]
+pub async unsafe fn resolve_all_async(
+    vtable_resolver: VTableResolver,
+    static_address_resolver: StaticAddressResolver,
+    member_function_resolver: MemberFunctionResolver,
+) {
+    generated::resolve_vtables_async(&vtable_resolver).await;
+    generated::resolve_static_addresses_async(&static_address_resolver).await;
+    generated::resolve_member_functions_async(&member_function_resolver).await;
+}
+
 /// Represents a type that can be resolved to an address in the game's memory space.
 pub trait Addressable {
     /// Returns the resolved address of this type.
@@ -42,11 +53,11 @@ pub struct Signature {
     /// The signature in string format.
     /// example: "E8 ?? ?? ?? ?? 84 C0 74 0D B0 02"
     pub string: &'static str,
-    
+
     /// The signature in byte format.
     /// example: &[0xE8, 0x00, 0x00, 0x00, 0x00, 0x84, 0xC0, 0x74, 0x0D, 0xB0, 0x02]
     pub bytes: &'static [u8],
-    
+
     /// The mask used to ignore bytes in the signature.
     /// example: &[0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
     pub mask: &'static [u8],
@@ -60,11 +71,11 @@ impl Signature {
             mask,
         }
     }
-    
+
     // pub fn from_string(string: &'a str) -> Self {
     //     let mut bytes = Vec::<u8>::new();
     //     let mut mask = Vec::<u8>::new();
-    //     
+    //
     //     for byte in string.split(' ') {
     //         if byte == "??" {
     //             bytes.push(0x00);
@@ -74,10 +85,10 @@ impl Signature {
     //             mask.push(0xFF);
     //         }
     //     }
-    //     
+    //
     //     let bytes: [u8] = [9];
     //     let mask: Vec<u8> = mask.as_slice().to_owned();
-    //     
+    //
     //     Self {
     //         string,
     //         bytes: *bytes,

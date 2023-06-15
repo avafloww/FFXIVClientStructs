@@ -5,3 +5,7 @@ edition = "2021"
 
 [dependencies]
 ffxivclientstructs_macros = { path = "../macros" }
+tokio = { version = "1", features = ["rt"], optional = true }
+
+[features]
+async-resolution = ["tokio"]
