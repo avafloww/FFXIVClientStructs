@@ -15,9 +15,9 @@ pub unsafe fn resolve_all(
     static_address_resolver: StaticAddressResolver,
     member_function_resolver: MemberFunctionResolver,
 ) {
-    generated::resolve_vtables(&vtable_resolver);
-    generated::resolve_static_addresses(&static_address_resolver);
-    generated::resolve_member_functions(&member_function_resolver);
+    generated::resolve_vtables(vtable_resolver);
+    generated::resolve_static_addresses(static_address_resolver);
+    generated::resolve_member_functions(member_function_resolver);
 }
 
 #[cfg(feature = "async-resolution")]
@@ -26,9 +26,9 @@ pub async unsafe fn resolve_all_async(
     static_address_resolver: StaticAddressResolver,
     member_function_resolver: MemberFunctionResolver,
 ) {
-    generated::resolve_vtables_async(&vtable_resolver).await;
-    generated::resolve_static_addresses_async(&static_address_resolver).await;
-    generated::resolve_member_functions_async(&member_function_resolver).await;
+    generated::resolve_vtables_async(vtable_resolver).await;
+    generated::resolve_static_addresses_async(static_address_resolver).await;
+    generated::resolve_member_functions_async(member_function_resolver).await;
 }
 
 /// Represents a type that can be resolved to an address in the game's memory space.

@@ -106,39 +106,110 @@ public class RustRootModule : RustModule
 
         // export helper functions
         var indent = Exporter.Indent(indentLevel + 1);
+        
+        ExportVTableResolver(builder, indent, false);
+        ExportVTableResolver(builder, indent, true);
+        
+        ExportStaticAddressResolver(builder, indent, false);
+        ExportStaticAddressResolver(builder, indent, true);
+        
+        ExportMemberFunctionResolver(builder, indent, false);
+        ExportMemberFunctionResolver(builder, indent, true);
 
+        // export members
+        foreach (var member in _members)
+        {
+            member.Value.Export(builder, indentLevel);
+        }
+    }
+
+    private void ExportVTableResolver(StringBuilder builder, string indent, bool async)
+    {
         // resolve vtables
-        builder.AppendLine("pub(crate) unsafe fn resolve_vtables(resolver: &crate::VTableResolver) {");
+        if (async)
+        {
+            builder.AppendLine("#[cfg(feature = \"async-resolution\")]");
+            builder.AppendLine("pub(crate) async unsafe fn resolve_vtables_async(resolver: crate::VTableResolver) {");
+            builder.AppendLine($"{indent}let mut tasks = tokio::task::JoinSet::new();");
+        }
+        else
+        {
+            builder.AppendLine("pub(crate) unsafe fn resolve_vtables(resolver: crate::VTableResolver) {");
+        }
+        
+        var prefix = async ? "tasks.spawn(async move { " : "";
+        var suffix = async ? " });" : ";";
         foreach (var rs in GetAllStructsRecursive()
                      .Where(rs => rs.VTableSignature != null))
         {
             builder.AppendLine(
-                $"{indent}{rs.Name}::set_address(&resolver(&{rs.Name}::SIGNATURE));");
+                $"{indent}{prefix}{rs.Name}::set_address(&resolver(&{rs.Name}::SIGNATURE)){suffix}");
         }
 
+        if (async)
+        {
+            builder.AppendLine($"{indent}while let Some(_) = tasks.join_next().await {{}}");
+        }
+        
         builder.AppendLine("}");
-
+    }
+    
+    private void ExportStaticAddressResolver(StringBuilder builder, string indent, bool async)
+    {
         // resolve static addresses
-        builder.AppendLine("pub(crate) unsafe fn resolve_static_addresses(resolver: &crate::StaticAddressResolver) {");
+        if (async)
+        {
+            builder.AppendLine("#[cfg(feature = \"async-resolution\")]");
+            builder.AppendLine("pub(crate) async unsafe fn resolve_static_addresses_async(resolver: crate::StaticAddressResolver) {");
+            builder.AppendLine($"{indent}let mut tasks = tokio::task::JoinSet::new();");
+        }
+        else
+        {
+            builder.AppendLine("pub(crate) unsafe fn resolve_static_addresses(resolver: crate::StaticAddressResolver) {");
+        }
+
+        var prefix = async ? "tasks.spawn(async move { " : "";
+        var suffix = async ? " });" : ";";
         foreach (var fn in GetAllStructsRecursive()
                      .SelectMany(rs => rs.Functions)
                      .Where(fn => fn.StaticAddress != null))
         {
             builder.AppendLine(
-                $"{indent}{fn.FullGeneratedName}::set_address(&resolver(&{fn.FullGeneratedName}::SIGNATURE));");
+                $"{indent}{prefix}{fn.FullGeneratedName}::set_address(&resolver(&{fn.FullGeneratedName}::SIGNATURE)){suffix}");
         }
 
+        if (async)
+        {
+            builder.AppendLine($"{indent}while let Some(_) = tasks.join_next().await {{}}");
+        }
+        
         builder.AppendLine("}");
+    }
 
+    private void ExportMemberFunctionResolver(StringBuilder builder, string indent, bool async)
+    {
+        var prefix = async ? "tasks.spawn(async move { " : "";
+        var suffix = async ? " });" : ";";
+        
         // resolve member functions
-        builder.AppendLine("pub(crate) unsafe fn resolve_member_functions(resolver: &crate::MemberFunctionResolver) {");
+        if (async)
+        {
+            builder.AppendLine("#[cfg(feature = \"async-resolution\")]");
+            builder.AppendLine("pub(crate) async unsafe fn resolve_member_functions_async(resolver: crate::MemberFunctionResolver) {");
+            builder.AppendLine($"{indent}let mut tasks = tokio::task::JoinSet::new();");
+        }
+        else
+        {
+            builder.AppendLine("pub(crate) unsafe fn resolve_member_functions(resolver: crate::MemberFunctionResolver) {");
+        }
+        
         builder.AppendLine($"{indent}// resolve member functions with signatures");
         foreach (var fn in GetAllStructsRecursive()
                      .SelectMany(rs => rs.Functions)
                      .Where(fn => fn.MemberFunction != null))
         {
             builder.AppendLine(
-                $"{indent}{fn.FullGeneratedName}::set_address(&resolver(&{fn.FullGeneratedName}::SIGNATURE));");
+                $"{indent}{prefix}{fn.FullGeneratedName}::set_address(&resolver(&{fn.FullGeneratedName}::SIGNATURE)){suffix}");
         }
 
         builder.AppendLine();
@@ -148,15 +219,14 @@ public class RustRootModule : RustModule
                      .Where(fn => fn.VirtualFunction != null))
         {
             builder.AppendLine(
-                $"{indent}{fn.FullGeneratedName}::set_address(&Some({fn.Owner.Name}::address().expect(\"unresolved vtable: {fn.Owner.BaseName}\").offset({fn.VirtualFunction!.Index})));");
+                $"{indent}{prefix}{fn.FullGeneratedName}::set_address(&Some({fn.Owner.Name}::address().expect(\"unresolved vtable: {fn.Owner.BaseName}\").offset({fn.VirtualFunction!.Index}))){suffix}");
+        }
+
+        if (async)
+        {
+            builder.AppendLine($"{indent}while let Some(_) = tasks.join_next().await {{}}");
         }
 
         builder.AppendLine("}");
-
-        // export members
-        foreach (var member in _members)
-        {
-            member.Value.Export(builder, indentLevel);
-        }
     }
 }
