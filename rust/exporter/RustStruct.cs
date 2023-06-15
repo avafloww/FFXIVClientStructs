@@ -328,9 +328,10 @@ public class RustStruct : RustTypeDecl
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
 
             // ResolvableVTable
+            var sig = Exporter.CreateRustSignature(VTableSignature.Signature);
             builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::ResolvableVTable for {BaseName} {{");
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::VTableSignature = crate::VTableSignature::new(\"{VTableSignature.Signature}\", {VTableSignature.Offset}, {VTableSignature.IsPointer.ToString().ToLowerInvariant()});");
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::VTableSignature = crate::VTableSignature::new({sig}, {VTableSignature.Offset}, {VTableSignature.IsPointer.ToString().ToLowerInvariant()});");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 

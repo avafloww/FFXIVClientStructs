@@ -37,7 +37,54 @@ pub(crate) trait AddressableMut: Addressable {
 }
 
 /// Represents a signature.
-pub struct Signature(pub &'static str);
+#[derive(Copy, Clone)]
+pub struct Signature {
+    /// The signature in string format.
+    /// example: "E8 ?? ?? ?? ?? 84 C0 74 0D B0 02"
+    pub string: &'static str,
+    
+    /// The signature in byte format.
+    /// example: &[0xE8, 0x00, 0x00, 0x00, 0x00, 0x84, 0xC0, 0x74, 0x0D, 0xB0, 0x02]
+    pub bytes: &'static [u8],
+    
+    /// The mask used to ignore bytes in the signature.
+    /// example: &[0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+    pub mask: &'static [u8],
+}
+
+impl Signature {
+    pub const fn new(string: &'static str, bytes: &'static [u8], mask: &'static [u8]) -> Self {
+        Self {
+            string,
+            bytes,
+            mask,
+        }
+    }
+    
+    // pub fn from_string(string: &'a str) -> Self {
+    //     let mut bytes = Vec::<u8>::new();
+    //     let mut mask = Vec::<u8>::new();
+    //     
+    //     for byte in string.split(' ') {
+    //         if byte == "??" {
+    //             bytes.push(0x00);
+    //             mask.push(0x00);
+    //         } else {
+    //             bytes.push(u8::from_str_radix(byte, 16).unwrap());
+    //             mask.push(0xFF);
+    //         }
+    //     }
+    //     
+    //     let bytes: [u8] = [9];
+    //     let mask: Vec<u8> = mask.as_slice().to_owned();
+    //     
+    //     Self {
+    //         string,
+    //         bytes: *bytes,
+    //         mask: *mask,
+    //     }
+    // }
+}
 
 //
 // Member functions
@@ -49,10 +96,8 @@ pub struct MemberFunctionSignature {
 }
 
 impl MemberFunctionSignature {
-    pub(crate) const fn new(signature: &'static str) -> Self {
-        Self {
-            signature: Signature(signature),
-        }
+    pub(crate) const fn new(signature: Signature) -> Self {
+        Self { signature }
     }
 }
 
@@ -75,9 +120,9 @@ pub struct StaticAddressSignature {
 }
 
 impl StaticAddressSignature {
-    pub(crate) const fn new(signature: &'static str, offset: isize, is_pointer: bool) -> Self {
+    pub(crate) const fn new(signature: Signature, offset: isize, is_pointer: bool) -> Self {
         Self {
-            signature: Signature(signature),
+            signature,
             offset,
             is_pointer,
         }

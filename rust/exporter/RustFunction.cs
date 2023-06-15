@@ -51,10 +51,11 @@ public class RustFunction : IRustExportable
         // ResolvableMemberFunction
         if (MemberFunction != null)
         {
+            var sig = Exporter.CreateRustSignature(MemberFunction.Signature);
             builder.AppendLine(
                 $"{Exporter.Indent(indentLevel)}impl crate::ResolvableMemberFunction for {GeneratedName} {{");
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::MemberFunctionSignature = crate::MemberFunctionSignature::new(\"{MemberFunction.Signature}\");");
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::MemberFunctionSignature = crate::MemberFunctionSignature::new({sig});");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
@@ -75,10 +76,11 @@ public class RustFunction : IRustExportable
         // ResolvableStaticAddress
         if (StaticAddress != null)
         {
+            var sig = Exporter.CreateRustSignature(StaticAddress.Signature);
             builder.AppendLine(
                 $"{Exporter.Indent(indentLevel)}impl crate::ResolvableStaticAddress for {GeneratedName} {{");
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::StaticAddressSignature = crate::StaticAddressSignature::new(\"{StaticAddress.Signature}\", {StaticAddress.Offset}, {StaticAddress.IsPointer.ToString().ToLowerInvariant()});");
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::StaticAddressSignature = crate::StaticAddressSignature::new({sig}, {StaticAddress.Offset}, {StaticAddress.IsPointer.ToString().ToLowerInvariant()});");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 

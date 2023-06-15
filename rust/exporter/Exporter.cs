@@ -103,7 +103,7 @@ public class Exporter
         new RustPrimitive("crate::cpp_std::Deque<>", true);
         new RustPrimitive("crate::cpp_std::Vector<>", true);
         new RustPrimitive("crate::cpp_std::Set<>", true);
-        
+
         // other cpp_std types that we provide
         new RustPrimitive("crate::cpp_std::Pair<>", false);
         new RustPrimitive("crate::cpp_std::String", false);
@@ -130,5 +130,10 @@ public class Exporter
     {
         var parts = name.Split("::");
         return parts[^1];
+    }
+
+    public static string CreateRustSignature(string sig)
+    {
+        return $"::ffxivclientstructs_macros::signature!(\"{sig}\")";
     }
 }

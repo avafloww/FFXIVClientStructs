@@ -1,5 +1,6 @@
-[package]
-name = "ffxivclientstructs"
-version = "0.0.0"
-edition = "2021"
-type = "lib"
+﻿[workspace]
+resolver = "2"
+members = [
+    "lib",
+    "macros",
+]

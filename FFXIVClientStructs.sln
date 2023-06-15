@@ -11,7 +11,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FFXIVClientStructs.Resolver
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CExporter", "ida\CExporter\CExporter.csproj", "{C204099B-4058-4FCE-A0EC-60DE4ACB1DF9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RustExporter", "RustExporter\RustExporter.csproj", "{F4D3E425-ED0C-44C6-9184-2990D7E3CEEC}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RustExporter", "rust\exporter\RustExporter.csproj", "{F4D3E425-ED0C-44C6-9184-2990D7E3CEEC}"
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "rust", "rust\rust.shproj", "{1A8F53D3-9E59-423E-B321-9654E08F875B}"
 EndProject

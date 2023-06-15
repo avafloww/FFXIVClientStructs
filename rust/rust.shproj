@@ -1,5 +1,5 @@
 ﻿<Project>
     <ItemGroup>
-        <None Include="**/*" />
+        <None Include="**/*" Exclude="exporter/**/*" />
     </ItemGroup>
 </Project>
