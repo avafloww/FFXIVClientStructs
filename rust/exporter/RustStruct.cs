@@ -312,18 +312,11 @@ public class RustStruct : RustTypeDecl
         // export vtable info
         if (VTableSignature != null)
         {
-            // Addressable & AddressableMut
-            builder.AppendLine(
-                $"{Exporter.Indent(indentLevel)}static mut RESOLVED_{BaseName}_VT: Option<*const usize> = None;");
-            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::Addressable for {BaseName} {{");
-            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn address() -> Option<*const usize> {{");
-            builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}unsafe {{ RESOLVED_{BaseName}_VT.clone() }}");
-            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
-            builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
-            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::AddressableMut for {BaseName} {{");
-            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn set_address(resolved: &Option<*const usize>) {{");
-            builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 2)}unsafe {{ RESOLVED_{BaseName}_VT = resolved.clone(); }}");
+            // Addressable
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::address::Addressable for {BaseName} {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}const KEY: &'static str = \"{Name}\";");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn address() -> *const u8 {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}crate::address::get_address(&{BaseName}::KEY)");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
 

@@ -33,18 +33,11 @@ public class RustFunction : IRustExportable
     {
         builder.AppendLine($"{Exporter.Indent(indentLevel)}pub struct {GeneratedName};");
 
-        // Addressable & AddressableMut
-        builder.AppendLine(
-            $"{Exporter.Indent(indentLevel)}static mut RESOLVED_{GeneratedName}: Option<*const usize> = None;");
-        builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::Addressable for {GeneratedName} {{");
-        builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn address() -> Option<*const usize> {{");
-        builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}unsafe {{ RESOLVED_{GeneratedName}.clone() }}");
-        builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
-        builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
-        builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::AddressableMut for {GeneratedName} {{");
-        builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn set_address(resolved: &Option<*const usize>) {{");
-        builder.AppendLine(
-            $"{Exporter.Indent(indentLevel + 2)}unsafe {{ RESOLVED_{GeneratedName} = resolved.clone(); }}");
+        // Addressable
+        builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::address::Addressable for {GeneratedName} {{");
+        builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}const KEY: &'static str = \"{FullGeneratedName.Replace("crate::", "")}\";");
+        builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn address() -> *const u8 {{");
+        builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}crate::address::get_address(&{GeneratedName}::KEY)");
         builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
         builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
 
@@ -66,8 +59,8 @@ public class RustFunction : IRustExportable
                 $"{Exporter.Indent(indentLevel)}impl crate::ResolvableVirtualFunction for {GeneratedName} {{");
             builder.AppendLine(
                 $"{Exporter.Indent(indentLevel + 1)}const VIRTUAL_INDEX: usize = {VirtualFunction.Index};");
-            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn vtable_address() -> Option<*const usize> {{");
-            builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}use crate::Addressable;");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn vtable_address() -> *const u8 {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}use crate::address::Addressable;");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}{Owner.Name}::address()");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
@@ -90,7 +83,12 @@ public class RustFunction : IRustExportable
             $"{Exporter.Indent(indentLevel + 1)}pub unsafe fn call({string.Join(", ", BuildParams(true, true))}) -> {RustTypeRef.FromClrType(_clrMethod.ReturnType)} {{");
         builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}use crate::Addressable;");
         builder.AppendLine(
-            $"{Exporter.Indent(indentLevel + 2)}let address = Self::address().expect(\"unresolved function: {GeneratedName}\");");
+            $"{Exporter.Indent(indentLevel + 2)}let address = Self::address();");
+        builder.AppendLine(
+            $"{Exporter.Indent(indentLevel + 2)}if address == std::ptr::null() {{");
+        builder.AppendLine(
+            $"{Exporter.Indent(indentLevel + 3)}panic!(\"unresolved function: {{}}\", Self::KEY);");
+        builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}}}");
         builder.AppendLine(
             $"{Exporter.Indent(indentLevel + 2)}let func: extern \"C\" fn({string.Join(", ", BuildParams(false, true))}) -> {RustTypeRef.FromClrType(_clrMethod.ReturnType)} = std::mem::transmute(address);");
         builder.AppendLine(

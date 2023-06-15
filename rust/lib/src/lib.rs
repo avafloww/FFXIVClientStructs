@@ -1,13 +1,19 @@
 #![allow(unused)]
 
+pub mod address;
+
 // Expose our own bindings to the C++ STL structures used by the game.
 pub mod cpp_std;
 
 // Include and expose generated bindings.
 mod generated;
+mod internal;
 
+use std::collections::HashMap;
+use std::sync::RwLock;
 pub use generated::ffxiv;
 pub use generated::havok;
+use crate::address::Addressable;
 
 // Public API to resolve addresses for all addressable types we support.
 pub unsafe fn resolve_all(
@@ -31,21 +37,6 @@ pub async unsafe fn resolve_all_async(
     generated::resolve_member_functions_async(member_function_resolver).await;
 }
 
-/// Represents a type that can be resolved to an address in the game's memory space.
-pub trait Addressable {
-    /// Returns the resolved address of this type.
-    /// If the type is unresolved, `None` is returned.
-    fn address() -> Option<*const usize>
-    where
-        Self: Sized;
-}
-
-/// Internal trait used to set the address of a type.
-pub(crate) trait AddressableMut: Addressable {
-    fn set_address(address: &Option<*const usize>)
-    where
-        Self: Sized;
-}
 
 /// Represents a signature.
 #[derive(Copy, Clone)]
@@ -63,6 +54,13 @@ pub struct Signature {
     pub mask: &'static [u8],
 }
 
+/// Represents a resolved signature.
+#[derive(Copy, Clone)]
+pub struct ResolvedSignature {
+    pub address: *const u8,
+    pub signature: Signature,
+}
+
 impl Signature {
     pub const fn new(string: &'static str, bytes: &'static [u8], mask: &'static [u8]) -> Self {
         Self {
@@ -71,30 +69,6 @@ impl Signature {
             mask,
         }
     }
-
-    // pub fn from_string(string: &'a str) -> Self {
-    //     let mut bytes = Vec::<u8>::new();
-    //     let mut mask = Vec::<u8>::new();
-    //
-    //     for byte in string.split(' ') {
-    //         if byte == "??" {
-    //             bytes.push(0x00);
-    //             mask.push(0x00);
-    //         } else {
-    //             bytes.push(u8::from_str_radix(byte, 16).unwrap());
-    //             mask.push(0xFF);
-    //         }
-    //     }
-    //
-    //     let bytes: [u8] = [9];
-    //     let mask: Vec<u8> = mask.as_slice().to_owned();
-    //
-    //     Self {
-    //         string,
-    //         bytes: *bytes,
-    //         mask: *mask,
-    //     }
-    // }
 }
 
 //
@@ -117,7 +91,7 @@ pub trait ResolvableMemberFunction: Addressable {
     const SIGNATURE: MemberFunctionSignature;
 }
 
-pub type MemberFunctionResolver = unsafe fn(&MemberFunctionSignature) -> Option<*const usize>;
+pub type MemberFunctionResolver = unsafe fn(&MemberFunctionSignature) -> *const u8;
 
 //
 // Static addresses
@@ -145,7 +119,7 @@ pub trait ResolvableStaticAddress: Addressable {
     const SIGNATURE: StaticAddressSignature;
 }
 
-pub type StaticAddressResolver = unsafe fn(&StaticAddressSignature) -> Option<*const usize>;
+pub type StaticAddressResolver = unsafe fn(&StaticAddressSignature) -> *const u8;
 
 //
 // Virtual function tables (vtables)
@@ -157,7 +131,7 @@ pub trait ResolvableVTable: Addressable {
     /// The signature of this vtable.
     const SIGNATURE: VTableSignature;
 }
-pub type VTableResolver = unsafe fn(&VTableSignature) -> Option<*const usize>;
+pub type VTableResolver = unsafe fn(&VTableSignature) -> *const u8;
 
 // for functions identified by their index in a vtable
 pub trait ResolvableVirtualFunction: Addressable {
@@ -165,5 +139,5 @@ pub trait ResolvableVirtualFunction: Addressable {
     const VIRTUAL_INDEX: usize;
 
     /// Returns the vtable address of this function's owning type.
-    fn vtable_address() -> Option<*const usize>;
+    fn vtable_address() -> *const u8;
 }
