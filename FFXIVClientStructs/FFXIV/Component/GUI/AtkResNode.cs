@@ -104,8 +104,8 @@ public unsafe partial struct AtkResNode : ICreatable
     [Obsolete("Use NodeFlags", false)]
     [FieldOffset(0x9E)] public short Flags;
     [FieldOffset(0x9E)] public NodeFlags NodeFlags;
-    [FieldOffset(0xA0)] public uint Flags_2; // bit 1 = has changes, ClipCount is bits 10-17, idk its a mess
-    [FieldOffset(0xA0)] public uint DrawFlags;
+    [FieldOffset(0xA0), CExportIgnore] public uint Flags_2; // bit 1 = has changes, ClipCount is bits 10-17, idk its a mess
+    [FieldOffset(0xA0), CExportIgnore] public uint DrawFlags;
 
     public bool IsVisible => NodeFlags.HasFlag(NodeFlags.Visible);
     
