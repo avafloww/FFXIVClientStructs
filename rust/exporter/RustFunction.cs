@@ -77,10 +77,14 @@ public class RustFunction : IRustExportable
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
+        // Since statics are basically just returning a new struct with no parameters, we should pass &self
+        // There's probably a nicer way to do this, but we'll figure it out as we go
+        var fakeSelf = _clrMethod.IsStatic ? "&self, " : "";
+
         // make the function callable
         builder.AppendLine($"{Exporter.Indent(indentLevel)}impl {GeneratedName} {{");
         builder.AppendLine(
-            $"{Exporter.Indent(indentLevel + 1)}pub unsafe fn call({string.Join(", ", BuildParams(true, true))}) -> {RustTypeRef.FromClrType(_clrMethod.ReturnType)} {{");
+            $"{Exporter.Indent(indentLevel + 1)}pub unsafe fn call({fakeSelf}{string.Join(", ", BuildParams(true, true))}) -> {RustTypeRef.FromClrType(_clrMethod.ReturnType)} {{");
         builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}use crate::Addressable;");
         builder.AppendLine(
             $"{Exporter.Indent(indentLevel + 2)}let address = Self::address();");
