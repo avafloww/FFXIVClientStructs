@@ -407,6 +407,7 @@ public class RustStruct : RustTypeDecl
                 sb.Append(" */ ");
             }
 
+            sb.Append("pub ");
             sb.Append(Name);
             sb.Append(": ");
             sb.Append(TypeRef);
