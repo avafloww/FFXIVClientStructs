@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using FFXIVClientStructs;
 
 namespace RustExporter;
 
@@ -61,6 +62,7 @@ public class RustRootModule : RustModule
                 if (!subStruct.OriginalClrType!
                         .GetFields()
                         .Where(finfo => !Attribute.IsDefined(finfo, typeof(ObsoleteAttribute)))
+                        .Where(finfo => !Attribute.IsDefined(finfo, typeof(CExportIgnoreAttribute)))
                         .Where(finfo => finfo.FieldType == rs.OriginalClrType)
                         .Any(finfo => finfo.GetCustomAttribute<FieldOffsetAttribute>()?.Value == 0))
                 {

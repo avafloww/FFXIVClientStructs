@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using FFXIVClientStructs;
 using FFXIVClientStructs.Interop.Attributes;
 
 namespace RustExporter;
@@ -89,6 +90,7 @@ public class RustStruct : RustTypeDecl
         var offset = -1;
         var fieldGroupings = clrType.GetFields()
             .Where(finfo => !Attribute.IsDefined(finfo, typeof(ObsoleteAttribute)))
+            .Where(finfo => !Attribute.IsDefined(finfo, typeof(CExportIgnoreAttribute)))
             .Where(finfo => !finfo.IsLiteral) // not constants
             .Where(finfo => !finfo.IsStatic) // not static
             .OrderBy(finfo => finfo.GetFieldOffset())
@@ -172,7 +174,8 @@ public class RustStruct : RustTypeDecl
 
         // export methods
         var methods = clrType.GetMethods()
-            .Where(m => !Attribute.IsDefined(m, typeof(ObsoleteAttribute)));
+            .Where(m => !Attribute.IsDefined(m, typeof(ObsoleteAttribute)))
+            .Where(m => !Attribute.IsDefined(m, typeof(CExportIgnoreAttribute)));
 
         // export functions
         foreach (var method in methods.Where(m =>
