@@ -11,6 +11,8 @@ namespace FFXIVClientStructs.FFXIV.Client.UI;
 [StructLayout(LayoutKind.Explicit, Size = 0x28C80)]
 public unsafe partial struct RaptureAtkModule
 {
+    public static RaptureAtkModule* Instance() => UIModule.Instance()->GetRaptureAtkModule();
+
     [FieldOffset(0x0)] public AtkModule AtkModule;
 
     [FieldOffset(0x10A70)] public Utf8String* AddonNames; // pointer to an array of 837 Utf8Strings
@@ -19,7 +21,7 @@ public unsafe partial struct RaptureAtkModule
 
     [FieldOffset(0x11910)] public RaptureAtkUnitManager RaptureAtkUnitManager;
 
-    [FieldOffset(0x1B590)] public RaptureAtkModuleFlags Flags; // TODO: this is actually at RaptureAtkUnitManager + 0x9C80
+    [FieldOffset(0x1B590), Obsolete("Use RaptureAtkUnitManager.Flags")] public RaptureAtkModuleFlags Flags; // TODO: this is actually at RaptureAtkUnitManager + 0x9C80
     
     [FieldOffset(0x1B8A0)] public int NameplateInfoCount;
     [FieldOffset(0x1B8A8)] public NamePlateInfo NamePlateInfoArray; // 0-50, &NamePlateInfoArray[i]
@@ -32,8 +34,9 @@ public unsafe partial struct RaptureAtkModule
     [VirtualFunction(39)]
     public partial void SetUiVisibility(bool uiVisible);
 
+    [Obsolete("Use RaptureAtkUnitManager.IsUiVisible")]
     public bool IsUiVisible {
-        get => !Flags.HasFlag(RaptureAtkModuleFlags.UiHidden);
+        get => !RaptureAtkUnitManager.Flags.HasFlag(RaptureAtkModuleFlags.UiHidden);
         set => SetUiVisibility(value);
     }
     

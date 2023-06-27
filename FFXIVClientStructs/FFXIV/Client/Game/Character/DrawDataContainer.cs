@@ -5,7 +5,7 @@
 public unsafe partial struct DrawDataContainer
 {
     [FieldOffset(0x000)] public void** Vtable;
-    [FieldOffset(0x008)] public void*  Unk8;
+    [FieldOffset(0x008)] public Character*  Parent;
 
     [FieldOffset(0x010)] public WeaponModelId MainHandModel;
     [FieldOffset(0x020)] public DrawObjectData MainHand;
@@ -15,6 +15,7 @@ public unsafe partial struct DrawDataContainer
 
     [FieldOffset(0x078)] public WeaponModelId OffHandModel;
     [FieldOffset(0x088)] public DrawObjectData OffHand;
+    [FieldOffset(0x0D4)] public byte OffHandState;
     [FieldOffset(0x0DA)] public ushort OffHandFlags1;
     [FieldOffset(0x0DC)] public byte OffHandFlags2;
 
@@ -44,6 +45,28 @@ public unsafe partial struct DrawDataContainer
     [MemberFunction("E8 ?? ?? ?? ?? 33 DB BE")]
     public partial void LoadWeapon(WeaponSlot slot, WeaponModelId weaponData, byte redrawOnEquality, byte unk2, byte skipGameObject, byte unk4);
 
+    /// <summary>
+    /// Called when Hide/Display Weapons when sheathed is toggled or /displayarms is used.
+    /// </summary>
+    /// <param name="hide">When false, weapons will be turned visible, when true, they will be hidden.</param>
+    [MemberFunction("E8 ?? ?? ?? ?? 4C 8B 6C 24 ?? 0F BA E5")]
+    public partial void HideWeapons(bool hide);
+
+    /// <summary>
+    /// Called when Hide/Display Headgear is toggled or /displayhead is used.
+    /// </summary>
+    /// <param name="unk">Almost always 0, but sometimes not?</param>
+    /// <param name="hide">When false, the headgear will be turned visible, when true it will be hidden.</param>
+    [MemberFunction("E8 ?? ?? ?? ?? 49 8B 04 ?? 80 A3")]
+    public partial void HideHeadgear(uint unk, bool hide);
+
+    /// <summary>
+    /// Called when Manually Adjust Visor is toggled or /visor is used.
+    /// </summary>
+    /// <param name="state">When true, visor will be toggled on, when false it will be toggled off.</param>
+    [MemberFunction("E8 ?? ?? ?? ?? 0F B6 97 ?? ?? ?? ?? 48 8B CF C0 EA")]
+    public partial void SetVisor(bool state);
+
     public enum WeaponSlot : uint
     {
         MainHand = 0,
@@ -69,10 +92,18 @@ public unsafe partial struct DrawDataContainer
         set => Flags2 = (byte)(value ? Flags2 | 0x08 : Flags2 & ~0x08);
     }
 
+    private const byte WeaponHiddenFlag = 0x02;
+
     public bool IsMainHandHidden
     {
-        get => (MainHandState & 0x02) == 0x02;
-        set => MainHandState = (byte)(value ? MainHandState | 0x02 : MainHandState & ~0x02);
+        get => (MainHandState & WeaponHiddenFlag) == WeaponHiddenFlag;
+        set => MainHandState = (byte)(value ? MainHandState | WeaponHiddenFlag : MainHandState & ~WeaponHiddenFlag);
+    }
+
+    public bool IsOffHandHidden
+    {
+        get => (OffHandState & WeaponHiddenFlag) == WeaponHiddenFlag;
+        set => OffHandState = (byte)(value ? OffHandState | WeaponHiddenFlag : OffHandState & ~WeaponHiddenFlag);
     }
 }
 
@@ -85,12 +116,17 @@ public unsafe partial struct DrawObjectData
 
 }
 
-[StructLayout(LayoutKind.Sequential, Size = Count)]
+[StructLayout(LayoutKind.Explicit, Size = Count)]
 public unsafe partial struct CustomizeData
 {
     private const int Count = 0x1A;
 
-    public fixed byte Data[Count];
+    [FieldOffset(0x00)] public fixed byte Data[Count];
+    [FieldOffset(0x00)] public byte Race;
+    [FieldOffset(0x01)] public byte Sex;
+    [FieldOffset(0x02)] public byte BodyType;
+    [FieldOffset(0x04)] public byte Clan;
+    [FieldOffset(0x14)] public byte LipColorFurPattern;
 
     public byte this[int idx]
         => Data[idx];
