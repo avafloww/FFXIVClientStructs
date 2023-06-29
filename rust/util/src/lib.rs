@@ -1,9 +1,7 @@
 #![allow(unused)]
-pub mod address;
 
-// Expose our own bindings to the C++ STL structures used by the game.
 pub mod cpp_std;
-
+pub mod address;
 pub mod macros;
 
 use crate::address::Addressable;

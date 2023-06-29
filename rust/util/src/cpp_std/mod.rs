@@ -1,4 +1,6 @@
-﻿mod vector;
+﻿//! Bindings to the C++ STL structures used by the game.
+
+mod vector;
 mod pair;
 mod string;
 mod deque;

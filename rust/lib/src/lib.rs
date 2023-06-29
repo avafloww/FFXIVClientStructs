@@ -1,7 +1,6 @@
-﻿pub use ffxiv_client_structs_util as util;
-pub use ffxiv_client_structs_generated as generated;
-
-use util::*;
+﻿pub use ffxiv_client_structs_generated as generated;
+use ffxiv_client_structs_util as util;
+pub use util::*;
 
 // Public API to resolve addresses for all addressable types we support.
 pub unsafe fn resolve_all(
