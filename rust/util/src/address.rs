@@ -43,11 +43,11 @@ fn set_address_inner(key: &str, address: *const u8) {
     debug!("set_address: {} @ {:p}", key, address);
 }
 
-pub(crate) fn set<T: Addressable>(address: *const u8) {
+pub fn set<T: Addressable>(address: *const u8) {
     set_address_inner(T::KEY, address);
 }
 
-pub(crate) fn set_address(key: &str, address: *const u8) {
+pub fn set_address(key: &str, address: *const u8) {
     set_address_inner(key, address);
 }
 

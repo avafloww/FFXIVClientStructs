@@ -1,0 +1,7 @@
+[package]
+name = "ffxiv_client_structs_util"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4"

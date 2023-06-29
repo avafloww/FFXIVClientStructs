@@ -99,14 +99,14 @@ public class Exporter
         new RustPrimitive("std::mem::ManuallyDrop<>", false);
 
         // these cpp_std types don't implement Copy, so mark them as copy-tainted
-        new RustPrimitive("crate::cpp_std::Map<>", true);
-        new RustPrimitive("crate::cpp_std::Deque<>", true);
-        new RustPrimitive("crate::cpp_std::Vector<>", true);
-        new RustPrimitive("crate::cpp_std::Set<>", true);
+        new RustPrimitive("cpp_std::Map<>", true);
+        new RustPrimitive("cpp_std::Deque<>", true);
+        new RustPrimitive("cpp_std::Vector<>", true);
+        new RustPrimitive("cpp_std::Set<>", true);
 
         // other cpp_std types that we provide
-        new RustPrimitive("crate::cpp_std::Pair<>", false);
-        new RustPrimitive("crate::cpp_std::String", false);
+        new RustPrimitive("cpp_std::Pair<>", false);
+        new RustPrimitive("cpp_std::String", false);
     }
 #pragma warning restore CA1806
 
@@ -134,6 +134,6 @@ public class Exporter
 
     public static string CreateRustSignature(string sig)
     {
-        return $"::ffxivclientstructs_macros::signature!(\"{sig}\")";
+        return $"signature!(\"{sig}\")";
     }
 }

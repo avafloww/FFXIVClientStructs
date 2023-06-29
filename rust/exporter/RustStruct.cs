@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using FFXIVClientStructs;
 using FFXIVClientStructs.Interop.Attributes;
 
@@ -70,7 +71,7 @@ public class RustStruct : RustTypeDecl
 
                 foreach (var s in gls)
                 {
-                    Add($"__phantom_{s.ToLower()}", new RustTypeRef($"std::marker::PhantomData<{s}>"));
+                    Add(-1, $"__phantom_{s.ToLower()}", new RustTypeRef($"std::marker::PhantomData<{s}>"));
                 }
 
                 rustType.Module.Add(Name, this);
@@ -151,7 +152,7 @@ public class RustStruct : RustTypeDecl
                     rustTypeRef = new RustTypeRef(RustTypeRef.ClrToRustName(fieldType));
                 }
 
-                rsTarget.Add(RustTypeRef.SafeSnakeCase(finfo.Name), rustTypeRef,
+                rsTarget.Add(offset, RustTypeRef.SafeSnakeCase(finfo.Name), rustTypeRef,
                     string.Format($"0x{{0:X{pad}}}", offset));
 
                 if (isUnion)
@@ -166,7 +167,7 @@ public class RustStruct : RustTypeDecl
             }
 
             if (!isUnion) continue;
-            Add($"_union_0x{offset:x}", new RustTypeRef(unionName!), string.Format($"0x{{0:X{pad}}}", offset));
+            Add(offset, $"_union_0x{offset:x}", new RustTypeRef(unionName!), string.Format($"0x{{0:X{pad}}}", offset));
             offset += unionMaxSize;
         }
 
@@ -253,24 +254,24 @@ public class RustStruct : RustTypeDecl
         return base.MarkAsCopyTainted(this) + tainted;
     }
 
-    public void Add(string name, RustTypeRef rustTypeRef, string? prefixComment = null, string? suffixComment = null)
+    public void Add(int offset, string name, RustTypeRef rustTypeRef, string? prefixComment = null, string? suffixComment = null)
     {
         // ugly hack for AgentContext
         if (rustTypeRef.Name.EndsWith("system::drawing::Point"))
         {
-            AddInternal($"{name}_x", new RustTypeRef("i32"), $"hack({name})", suffixComment);
-            AddInternal($"{name}_y", new RustTypeRef("i32"), $"hack({name})", suffixComment);
+            AddInternal(offset, $"{name}_x", new RustTypeRef("i32"), $"hack({name})", suffixComment);
+            AddInternal(offset, $"{name}_y", new RustTypeRef("i32"), $"hack({name})", suffixComment);
         }
         else
         {
-            AddInternal(name, rustTypeRef, prefixComment, suffixComment);
+            AddInternal(offset, name, rustTypeRef, prefixComment, suffixComment);
         }
     }
 
-    private void AddInternal(string name, RustTypeRef rustTypeRef, string? prefixComment = null,
+    private void AddInternal(int offset, string name, RustTypeRef rustTypeRef, string? prefixComment = null,
         string? suffixComment = null)
     {
-        _members.Add(new Member(name, rustTypeRef, prefixComment, suffixComment));
+        _members.Add(new Member(offset, name, rustTypeRef, prefixComment, suffixComment));
     }
 
     public override void Export(StringBuilder builder, int indentLevel)
@@ -312,22 +313,61 @@ public class RustStruct : RustTypeDecl
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
+        // tests
+        if (!IsUnion)
+        {
+            var testFnName = BaseName.Replace("<", "_")
+                .Replace(">", "_")
+                .Replace(",", "_")
+                .Replace(" ", "");
+            
+            var nameWithoutGenerics = BaseName.Contains("<") ? Regex.Replace(Name, "T\\d", m => "()") : BaseName;
+            
+            // size test
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}#[cfg(test)]");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}#[test]");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}pub fn sizeof__{testFnName}() {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}assert_size!({nameWithoutGenerics}, 0x{Size:X});");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
+            
+            // offset tests
+            if (_members.Any(m => m.Offset >= 0))
+            {
+                builder.AppendLine($"{Exporter.Indent(indentLevel)}#[cfg(test)]");
+                builder.AppendLine($"{Exporter.Indent(indentLevel)}#[test]");
+                builder.AppendLine($"{Exporter.Indent(indentLevel)}pub fn offsets__{testFnName}() {{");
+                builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}assert_offsets!({nameWithoutGenerics}, [");
+            
+                foreach (var member in _members)
+                {
+                    if (member.Offset < 0) {
+                        continue;
+                    }
+                
+                    builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}{member.Name}: 0x{member.Offset:X},");
+                }
+            
+                builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}]);");
+                builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
+            }
+        }
+
         // export vtable info
         if (VTableSignature != null)
         {
             // Addressable
-            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::address::Addressable for {BaseName} {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl Addressable for {BaseName} {{");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}const KEY: &'static str = \"{Name}\";");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn address() -> *const u8 {{");
-            builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}crate::address::get_address(&{BaseName}::KEY)");
+            builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}get_address(&{BaseName}::KEY)");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
 
             // ResolvableVTable
             var sig = Exporter.CreateRustSignature(VTableSignature.Signature);
-            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::ResolvableVTable for {BaseName} {{");
+            builder.AppendLine($"{Exporter.Indent(indentLevel)}impl ResolvableVTable for {BaseName} {{");
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::VTableSignature = crate::VTableSignature::new({sig}, {VTableSignature.Offset}, {VTableSignature.IsPointer.ToString().ToLowerInvariant()});");
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: VTableSignature = VTableSignature::new({sig}, {VTableSignature.Offset}, {VTableSignature.IsPointer.ToString().ToLowerInvariant()});");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
@@ -360,22 +400,22 @@ public class RustStruct : RustTypeDecl
             if (offset % 8 == 0 && gap >= 8)
             {
                 var gapDiv = gap - (gap % 8);
-                Add($"_gap_0x{offset:x}", new RustTypeRef("u8", gapDiv), padFill);
+                Add(offset, $"_gap_0x{offset:x}", new RustTypeRef("u8", gapDiv), padFill);
                 offset += gapDiv;
             }
             else if (offset % 4 == 0 && gap >= 4)
             {
-                Add($"_gap_0x{offset:x}", new RustTypeRef("u8", 4), padFill);
+                Add(offset, $"_gap_0x{offset:x}", new RustTypeRef("u8", 4), padFill);
                 offset += 4;
             }
             else if (offset % 2 == 0 && gap >= 2)
             {
-                Add($"_gap_0x{offset:x}", new RustTypeRef("u8", 2), padFill);
+                Add(offset, $"_gap_0x{offset:x}", new RustTypeRef("u8", 2), padFill);
                 offset += 2;
             }
             else
             {
-                Add($"_gap_0x{offset:x}", new RustTypeRef("u8"), padFill);
+                Add(offset, $"_gap_0x{offset:x}", new RustTypeRef("u8"), padFill);
                 offset += 1;
             }
         }
@@ -389,8 +429,9 @@ public class RustStruct : RustTypeDecl
         return (int?)typeof(Unsafe).GetMethod("SizeOf")?.MakeGenericMethod(type).Invoke(null, null) ?? 0;
     }
 
-    private record Member(string Name, RustTypeRef TypeRef, string? PrefixComment, string? SuffixComment)
+    private record Member(int Offset, string Name, RustTypeRef TypeRef, string? PrefixComment, string? SuffixComment)
     {
+        public int Offset = Offset;
         public string Name = Name;
         public RustTypeRef TypeRef = TypeRef;
         public string? PrefixComment = PrefixComment;

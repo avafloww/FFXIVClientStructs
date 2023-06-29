@@ -225,6 +225,7 @@ public class RustTypeRef
             }
 
             fullName = "cpp_std." + fullName;
+            isPrimitive = true;
         }
 
         if (fullName.StartsWith(Exporter.InteropNamespacePrefix))

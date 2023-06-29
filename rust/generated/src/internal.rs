@@ -1,7 +1,7 @@
 ﻿// Internal helper functions.
 
-use crate::{MemberFunctionResolver, MemberFunctionSignature, StaticAddressResolver, StaticAddressSignature, VTableResolver, VTableSignature};
-use crate::address::{get_address, set_address};
+use ffxiv_client_structs_util::{MemberFunctionResolver, MemberFunctionSignature, StaticAddressResolver, StaticAddressSignature, VTableResolver, VTableSignature};
+use ffxiv_client_structs_util::address::{get_address, set_address};
 
 pub unsafe fn resolve_vtable(key: &str, signature: &VTableSignature, resolver: VTableResolver) {
     let address = resolver(signature);

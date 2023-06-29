@@ -1,6 +1,8 @@
 ﻿[workspace]
 resolver = "2"
 members = [
-    "lib",
     "macros",
+    "util",
+    "generated",
+    "lib"
 ]

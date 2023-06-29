@@ -1,17 +1,13 @@
 [package]
-name = "ffxiv_client_structs"
-version = "0.0.0"
+name = "ffxiv_client_structs_generated"
+version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 ffxiv_client_structs_macros = { path = "../macros" }
 ffxiv_client_structs_util = { path = "../util" }
-ffxiv_client_structs_generated = { path = "../generated" }
-log = "0.4"
 tokio = { version = "1", features = ["rt"], optional = true }
 
 [features]
-async-resolution = [
-    "ffxiv_client_structs_generated/async-resolution",
-    "tokio"
-]
+async-resolution = ["tokio"]

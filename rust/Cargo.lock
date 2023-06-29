@@ -9,20 +9,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
-name = "ffxivclientstructs"
+name = "ffxiv_client_structs"
 version = "0.0.0"
 dependencies = [
- "ffxivclientstructs_macros",
+ "ffxiv_client_structs_generated",
+ "ffxiv_client_structs_macros",
+ "ffxiv_client_structs_util",
  "log",
  "tokio",
 ]
 
 [[package]]
-name = "ffxivclientstructs_macros"
+name = "ffxiv_client_structs_generated"
+version = "0.1.0"
+dependencies = [
+ "ffxiv_client_structs_macros",
+ "ffxiv_client_structs_util",
+ "tokio",
+]
+
+[[package]]
+name = "ffxiv_client_structs_macros"
 version = "0.1.0"
 dependencies = [
  "litrs",
  "quote",
+]
+
+[[package]]
+name = "ffxiv_client_structs_util"
+version = "0.1.0"
+dependencies = [
+ "log",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 use litrs::Literal;
 use quote::quote;
 
-const BASE_CRATE_NAME: &str = "ffxivclientstructs";
+const GENERATED_CRATE_NAME: &str = "ffxiv_client_structs_generated";
 
 #[proc_macro]
 pub fn signature(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -31,14 +31,14 @@ pub fn signature(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
             let bytes = quote! { &[#(#bytes),*] };
             let mask = quote! { &[#(#mask),*] };
 
-            let prefix = if std::env::var("CARGO_PKG_NAME").unwrap() == BASE_CRATE_NAME {
-                quote! { crate }
+            let sig_struct = if std::env::var("CARGO_PKG_NAME").unwrap() == GENERATED_CRATE_NAME {
+                quote! { Signature }
             } else {
-                quote! { ::ffxivclientstructs }
+                quote! { ::ffxiv_client_structs::util::Signature }
             };
             
             let output = quote! {
-                #prefix::Signature::new(#s, #bytes, #mask)
+                #sig_struct::new(#bytes, #mask)
             };
 
             output.into()

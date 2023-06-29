@@ -34,10 +34,10 @@ public class RustFunction : IRustExportable
         builder.AppendLine($"{Exporter.Indent(indentLevel)}pub struct {GeneratedName};");
 
         // Addressable
-        builder.AppendLine($"{Exporter.Indent(indentLevel)}impl crate::address::Addressable for {GeneratedName} {{");
+        builder.AppendLine($"{Exporter.Indent(indentLevel)}impl Addressable for {GeneratedName} {{");
         builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}const KEY: &'static str = \"{FullGeneratedName.Replace("crate::", "")}\";");
         builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn address() -> *const u8 {{");
-        builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}crate::address::get_address(&{GeneratedName}::KEY)");
+        builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}get_address(&{GeneratedName}::KEY)");
         builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
         builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
 
@@ -46,9 +46,9 @@ public class RustFunction : IRustExportable
         {
             var sig = Exporter.CreateRustSignature(MemberFunction.Signature);
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel)}impl crate::ResolvableMemberFunction for {GeneratedName} {{");
+                $"{Exporter.Indent(indentLevel)}impl ResolvableMemberFunction for {GeneratedName} {{");
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::MemberFunctionSignature = crate::MemberFunctionSignature::new({sig});");
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: MemberFunctionSignature = MemberFunctionSignature::new({sig});");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
@@ -56,11 +56,10 @@ public class RustFunction : IRustExportable
         if (VirtualFunction != null)
         {
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel)}impl crate::ResolvableVirtualFunction for {GeneratedName} {{");
+                $"{Exporter.Indent(indentLevel)}impl ResolvableVirtualFunction for {GeneratedName} {{");
             builder.AppendLine(
                 $"{Exporter.Indent(indentLevel + 1)}const VIRTUAL_INDEX: usize = {VirtualFunction.Index};");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}fn vtable_address() -> *const u8 {{");
-            builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}use crate::address::Addressable;");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}{Owner.Name}::address()");
             builder.AppendLine($"{Exporter.Indent(indentLevel + 1)}}}");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
@@ -71,9 +70,9 @@ public class RustFunction : IRustExportable
         {
             var sig = Exporter.CreateRustSignature(StaticAddress.Signature);
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel)}impl crate::ResolvableStaticAddress for {GeneratedName} {{");
+                $"{Exporter.Indent(indentLevel)}impl ResolvableStaticAddress for {GeneratedName} {{");
             builder.AppendLine(
-                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: crate::StaticAddressSignature = crate::StaticAddressSignature::new({sig}, {StaticAddress.Offset}, {StaticAddress.IsPointer.ToString().ToLowerInvariant()});");
+                $"{Exporter.Indent(indentLevel + 1)}const SIGNATURE: StaticAddressSignature = StaticAddressSignature::new({sig}, {StaticAddress.Offset}, {StaticAddress.IsPointer.ToString().ToLowerInvariant()});");
             builder.AppendLine($"{Exporter.Indent(indentLevel)}}}");
         }
 
@@ -85,7 +84,6 @@ public class RustFunction : IRustExportable
         builder.AppendLine($"{Exporter.Indent(indentLevel)}impl {GeneratedName} {{");
         builder.AppendLine(
             $"{Exporter.Indent(indentLevel + 1)}pub unsafe fn call({fakeSelf}{string.Join(", ", BuildParams(true, true))}) -> {RustTypeRef.FromClrType(_clrMethod.ReturnType)} {{");
-        builder.AppendLine($"{Exporter.Indent(indentLevel + 2)}use crate::Addressable;");
         builder.AppendLine(
             $"{Exporter.Indent(indentLevel + 2)}let address = Self::address();");
         builder.AppendLine(
