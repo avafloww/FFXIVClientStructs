@@ -80,7 +80,13 @@ public class RustTypeRef
             ptr = "*mut " + ptr;
         }
 
-        return ArraySize >= 0 ? $"{ptr}[{Name}; 0x{ArraySize:X}]" : $"{ptr}{Name}";
+        var ty = Name;
+        if (PointerDepth == 0 && (Declaration is not RustPrimitive || Declaration.Name.Contains("cpp_std::")))
+        {
+            ty = $"std::mem::ManuallyDrop<{ty}>";
+        }
+
+        return ArraySize >= 0 ? $"{ptr}[{ty}; 0x{ArraySize:X}]" : $"{ptr}{ty}";
     }
 
     public RustTypeRef Clone(string? nameOverride = null)
@@ -196,6 +202,11 @@ public class RustTypeRef
                 }
 
                 fullName += '>';
+
+                if (isPointer)
+                {
+                    fullName += '*';
+                }
             }
         }
         else

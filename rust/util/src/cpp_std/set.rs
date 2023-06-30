@@ -1,6 +1,6 @@
 ﻿#[repr(C)]
 #[derive(Clone)]
-pub struct Node<K> where K: Copy {
+pub struct Node<K> {
     left: *mut Node<K>,
     parent: *mut Node<K>,
     right: *mut Node<K>,
@@ -11,7 +11,7 @@ pub struct Node<K> where K: Copy {
     key: K,
 }
 
-impl<K> Node<K> where K: Copy {
+impl<K> Node<K> {
     unsafe fn next(&mut self) -> *mut Node<K> {
         assert!(!self.is_nil);
         if (*self.right).is_nil {
@@ -65,12 +65,12 @@ impl<K> Node<K> where K: Copy {
 
 #[repr(C)]
 #[derive(Clone)]
-pub struct Set<K> where K: Copy {
+pub struct Set<K> {
     head: *mut Node<K>,
     count: u64,
 }
 
-impl<K> Set<K> where K: Copy {
+impl<K> Set<K> {
     fn smallest_value(&self) -> *mut Node<K> {
         unsafe { (*self.head).left }
     }
@@ -89,12 +89,12 @@ impl<K> Set<K> where K: Copy {
 
 #[repr(C)]
 #[derive(Clone)]
-pub struct Enumerator<K> where K: Copy {
+pub struct Enumerator<K> {
     head: *mut Node<K>,
     current: *mut Node<K>,
 }
 
-impl<K> Enumerator<K> where K: Copy {
+impl<K> Enumerator<K> {
     fn move_next(&mut self) -> bool {
         if self.current.is_null() || self.current == unsafe { (*self.head).right } {
             return false;

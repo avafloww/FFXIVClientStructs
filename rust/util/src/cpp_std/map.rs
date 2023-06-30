@@ -2,7 +2,7 @@
 
 #[repr(C)]
 #[derive(Clone)]
-pub struct Node<K, V> where K: Copy, V: Copy {
+pub struct Node<K, V> {
     left: *mut Node<K, V>,
     parent: *mut Node<K, V>,
     right: *mut Node<K, V>,
@@ -13,7 +13,7 @@ pub struct Node<K, V> where K: Copy, V: Copy {
     key_value_pair: Pair<K, V>,
 }
 
-impl<K, V> Node<K, V> where K: Copy, V: Copy {
+impl<K, V> Node<K, V> {
     unsafe fn next(&mut self) -> *mut Node<K, V> {
         assert!(!self.is_nil);
         if (*self.right).is_nil {
@@ -67,12 +67,12 @@ impl<K, V> Node<K, V> where K: Copy, V: Copy {
 
 #[repr(C)]
 #[derive(Clone)]
-pub struct Map<K, V> where K: Copy, V: Copy {
+pub struct Map<K, V> {
     head: *mut Node<K, V>,
     count: u64,
 }
 
-impl<K, V> Map<K, V> where K: Copy, V: Copy {
+impl<K, V> Map<K, V> {
     fn smallest_value(&self) -> *mut Node<K, V> {
         unsafe { (*self.head).left }
     }
@@ -91,12 +91,12 @@ impl<K, V> Map<K, V> where K: Copy, V: Copy {
 
 #[repr(C)]
 #[derive(Clone)]
-pub struct Enumerator<K, V> where K: Copy, V: Copy {
+pub struct Enumerator<K, V> {
     head: *mut Node<K, V>,
     current: *mut Node<K, V>,
 }
 
-impl<K, V> Enumerator<K, V> where K: Copy, V: Copy {
+impl<K, V> Enumerator<K, V> {
     fn move_next(&mut self) -> bool {
         if self.current.is_null() || self.current == unsafe { (*self.head).right } {
             return false;

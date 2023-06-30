@@ -1,6 +1,6 @@
 ﻿#[repr(C)]
 #[derive(Clone)]
-pub struct Deque<T> where T: Copy {
+pub struct Deque<T> {
     pub container_base: *mut (), // iterator base nonsense
     pub map: *mut *mut T, // pointer to array of pointers (size MapSize) to arrays of T (size BlockSize)
     pub map_size: u64, // size of map
@@ -8,7 +8,7 @@ pub struct Deque<T> where T: Copy {
     pub my_size: u64, // current length 
 }
 
-impl<T> Deque<T> where T: Copy {
+impl<T> Deque<T> {
     pub fn block_size() -> usize {
         let size = std::mem::size_of::<T>();
         if size <= 1 {
@@ -36,6 +36,7 @@ impl<T> Deque<T> where T: Copy {
         let actual_index = self.my_off + index;
         let block = self.get_block(actual_index);
         let offset = actual_index % (Self::block_size() as u64);
-        Some(*(*self.map.offset(block as isize)).offset(offset as isize))
+        let p = *self.map.offset(block as isize);
+        Some(std::ptr::read(p.offset(offset as isize)))
     }
 }

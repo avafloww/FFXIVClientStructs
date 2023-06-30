@@ -1,9 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using FFXIVClientStructs;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.Interop.Attributes;
 
 namespace RustExporter;
@@ -66,8 +68,20 @@ public class RustStruct : RustTypeDecl
                 Name = Name.Replace("<>", $"<{string.Join(", ", gls)}>");
 
                 // set up this type and bail early
-                Size = 0;
+                if (clrType == typeof(AtkLinkedList<>))
+                {
+                    // hack for AtkLinkedList specifically
+                    Size = 0x18;
+                }
+                else
+                {
+                    // prefer to use explicit size if available
+                    var layout = clrType.GetCustomAttribute<StructLayoutAttribute>();
+                    Size = layout?.Size ?? 0;
+                }
+                
                 IsUnion = false;
+                FillGaps(0, Size, new string(' ', Size.ToString("X").Length + 2));
 
                 foreach (var s in gls)
                 {
@@ -88,7 +102,7 @@ public class RustStruct : RustTypeDecl
         var padFill = new string(' ', pad + 2);
 
         // export fields
-        var offset = -1;
+        var offset = 0;
         var fieldGroupings = clrType.GetFields()
             .Where(finfo => !Attribute.IsDefined(finfo, typeof(ObsoleteAttribute)))
             .Where(finfo => !Attribute.IsDefined(finfo, typeof(CExportIgnoreAttribute)))
@@ -99,9 +113,6 @@ public class RustStruct : RustTypeDecl
         var unionIndex = 0;
         foreach (var grouping in fieldGroupings)
         {
-            // first defined field of the class
-            if (offset == -1) offset = grouping.Key;
-            
             var fieldOffset = grouping.Key;
             var finfos = grouping
                 .Where((finfo) => finfo.Name.ToLower() != "vtbl" && finfo.Name.ToLower() != "vtable")
@@ -157,7 +168,6 @@ public class RustStruct : RustTypeDecl
 
                 if (isUnion)
                 {
-                    unionMaxSize = Math.Max(unionMaxSize, 8);
                     unionMaxSize = Math.Max(unionMaxSize, fieldSize);
                 }
                 else
@@ -237,19 +247,19 @@ public class RustStruct : RustTypeDecl
         // all types must implement Copy in unions, so if this is a union, we need to
         // ensure that all members implement Copy, or if they don't (aka they are copy tainted),
         // wrap them in ManuallyDrop
-        if (IsUnion)
-        {
-            foreach (var member in _members)
-            {
-                if (member.TypeRef.Name.StartsWith("std::mem::ManuallyDrop")) continue;
-
-                var decl = Get(member.TypeRef.Name);
-                if (decl.IsCopyTainted)
-                {
-                    member.TypeRef = member.TypeRef.Clone($"std::mem::ManuallyDrop<{member.TypeRef.Name}>");
-                }
-            }
-        }
+        // if (IsUnion)
+        // {
+        //     foreach (var member in _members)
+        //     {
+        //         if (member.TypeRef.Name.StartsWith("std::mem::ManuallyDrop")) continue;
+        //
+        //         var decl = Get(member.TypeRef.Name);
+        //         if (decl.IsCopyTainted)
+        //         {
+        //             member.TypeRef = member.TypeRef.Clone($"std::mem::ManuallyDrop<{member.TypeRef.Name}>");
+        //         }
+        //     }
+        // }
 
         return base.MarkAsCopyTainted(this) + tainted;
     }
@@ -287,11 +297,12 @@ public class RustStruct : RustTypeDecl
             }
         }
 
-        builder.AppendLine($"{Exporter.Indent(indentLevel)}#[repr(C)]");
+        builder.AppendLine($"{Exporter.Indent(indentLevel)}#[repr(C, packed)]");
 
         // unions with manual-drop members should not derive Copy or Clone
         var shouldDerive = !IsUnion || !_members.Any(m => m.TypeRef.Name.StartsWith("std::mem::ManuallyDrop<"));
         shouldDerive &= !SpecialCaseNoDerive.Contains(Name);
+        shouldDerive = false;
         if (shouldDerive)
         {
             builder.AppendLine($"{Exporter.Indent(indentLevel)}{_derive}");
