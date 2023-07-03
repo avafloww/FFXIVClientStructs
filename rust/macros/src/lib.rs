@@ -34,15 +34,15 @@ pub fn signature(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
             let sig_struct = if std::env::var("CARGO_PKG_NAME").unwrap() == GENERATED_CRATE_NAME {
                 quote! { Signature }
             } else {
-                quote! { ::ffxiv_client_structs::util::Signature }
+                quote! { ::ffxiv_client_structs::Signature }
             };
-            
+
             let output = quote! {
                 #sig_struct::new(#bytes, #mask)
             };
 
             output.into()
         }
-        Ok(_other) => panic!("expected string literal")
+        Ok(_other) => panic!("expected string literal"),
     }
 }
